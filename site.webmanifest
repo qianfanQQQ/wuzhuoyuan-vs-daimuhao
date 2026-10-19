@@ -1,0 +1,27 @@
+{
+  "name": "吴卓远大战代牧豪",
+  "short_name": "大战代牧豪",
+  "description": "2D 俯视角生存射击网页游戏。五种枪械、精英追兵、BOSS 战与随机升级。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#05080e",
+  "theme_color": "#06090f",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

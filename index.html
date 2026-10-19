@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06090f">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="《吴卓远大战代牧豪》是一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。WASD 移动、鼠标瞄准射击，解锁手枪、冲锋枪、霰弹枪、狙击枪和火箭筒，在无限生存与关卡挑战中击败精英追兵和 BOSS。支持电脑与手机，免费在线玩。">
+  <meta name="keywords" content="吴卓远大战代牧豪,吴卓远,代牧豪,2D射击游戏,俯视角射击,网页游戏,在线小游戏,HTML5游戏,Canvas游戏,生存射击,无限生存,枪战游戏,BOSS战,免费网页游戏">
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
+  <meta name="googlebot" content="index,follow,max-image-preview:large">
+  <meta name="author" content="吴卓远大战代牧豪">
+  <meta name="applicable-device" content="pc,mobile">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="大战代牧豪">
+  <title>吴卓远大战代牧豪 — 2D 俯视角射击生存网页游戏 | 在线免费玩</title>
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="吴卓远大战代牧豪">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="吴卓远大战代牧豪 — 在线 2D 俯视角生存射击游戏">
+  <meta property="og:description" content="拿好枪，升级火力，别被好兄弟追上。五种枪械、精英敌人、BOSS 战和随机升级，电脑与手机都能免费在线玩。">
+  <meta property="og:image" content="assets/og-cover.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="《吴卓远大战代牧豪》2D 俯视角生存射击网页游戏封面">
+  <meta property="og:url" content="./">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="吴卓远大战代牧豪 — 在线 2D 俯视角生存射击游戏">
+  <meta name="twitter:description" content="五种枪械、精英敌人、BOSS 战和随机升级。打开浏览器，别被好兄弟追上。">
+  <meta name="twitter:image" content="assets/og-cover.png">
+
+  <link id="canonicalLink" rel="canonical" href="./">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="preload" as="image" href="assets/player.png?v=20261019-3" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/enemy.png?v=20261019-3" fetchpriority="high">
+  <link rel="stylesheet" href="style.css?v=20261019-3">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b1119' stroke='%235de1ff' stroke-width='4'/%3E%3Ccircle cx='32' cy='24' r='10' fill='%235de1ff'/%3E%3Cpath d='M14 55c2-13 9-19 18-19s16 6 18 19' fill='%235de1ff'/%3E%3C/svg%3E">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": "吴卓远大战代牧豪",
+        "alternateName": "Wu Zhuoyuan vs. Dai Muhao",
+        "description": "一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。",
+        "inLanguage": "zh-CN"
+      },
+      {
+        "@type": "VideoGame",
+        "name": "吴卓远大战代牧豪",
+        "alternateName": "Wu Zhuoyuan vs. Dai Muhao",
+        "description": "《吴卓远大战代牧豪》是一款 HTML5 Canvas 制作的 2D 俯视角生存射击网页游戏。玩家可以使用五种枪械、冲刺、换弹和随机升级，在无限生存与关卡挑战中对抗精英追兵和 BOSS。",
+        "genre": ["Survival", "Shooter", "Top-down shooter", "Action"],
+        "gamePlatform": ["Web browser", "PC", "Mobile web"],
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "inLanguage": "zh-CN",
+        "isAccessibleForFree": true,
+        "playMode": ["SinglePlayer"],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "CNY",
+          "availability": "https://schema.org/InStock"
+        },
+        "image": "assets/og-cover.png"
+      }
+    ]
+  }
+  </script>
+
+  <script>
+    (function () {
+      if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+      var baseUrl = location.origin + location.pathname.replace(/index\.html$/i, '');
+      var canonical = document.getElementById('canonicalLink');
+      var ogUrl = document.querySelector('meta[property="og:url"]');
+      var ogImage = document.querySelector('meta[property="og:image"]');
+      var twitterImage = document.querySelector('meta[name="twitter:image"]');
+      if (canonical) canonical.setAttribute('href', baseUrl);
+      if (ogUrl) ogUrl.setAttribute('content', baseUrl);
+      if (ogImage) ogImage.setAttribute('content', new URL('assets/og-cover.png', baseUrl).href);
+      if (twitterImage) twitterImage.setAttribute('content', new URL('assets/og-cover.png', baseUrl).href);
+    })();
+  </script>
+</head>
+<body data-state="menu">
+  <canvas id="gameCanvas" aria-label="吴卓远大战代牧豪游戏画面"></canvas>
+  <div class="screen-fx" aria-hidden="true"></div>
+
+  <noscript>
+    <div class="seo-fallback">
+      <div class="seo-fallback-panel">
+        <p class="eyebrow">WU ZHUOYUAN VS. DAI MUHAO</p>
+        <h2>吴卓远大战代牧豪 — 2D 俯视角生存射击网页游戏</h2>
+        <p>你只是想安静地活下去，可你的好兄弟不这么想。拿好枪，升级火力，别被追上。</p>
+        <p>本游戏使用 HTML5 Canvas 原生开发，无需下载客户端，支持电脑和手机浏览器。游戏包含无限生存与关卡挑战两种模式，手枪、冲锋枪、霰弹枪、狙击枪和火箭筒五种枪械，普通敌人、精英敌人与拥有特殊攻击模式的 BOSS。</p>
+        <h3>操作方式</h3>
+        <p>电脑端：WASD 移动，鼠标瞄准，左键射击，R 换弹，空格冲刺，数字键 1–5 切换枪械，ESC 暂停。手机端：左侧摇杆移动，右侧摇杆瞄准，并使用开火、换弹、冲刺和切枪按钮。</p>
+        <p>请启用 JavaScript 后开始游戏。</p>
+      </div>
+    </div>
+  </noscript>
+
+  <div class="top-controls">
+    <button id="soundToggle" class="icon-button" type="button" title="音效开关" aria-label="音效开关">
+      <span id="soundIcon" aria-hidden="true">🔊</span>
+    </button>
+    <button id="pauseButton" class="icon-button pause-button" type="button" title="暂停游戏（ESC）" aria-label="暂停游戏">
+      <span aria-hidden="true">Ⅱ</span>
+    </button>
+  </div>
+
+  <main id="uiLayer">
+    <!-- ===================== 主菜单 ===================== -->
+    <section id="menuScreen" class="screen menu-screen active" aria-label="主菜单">
+      <div class="menu-shell">
+        <div class="hero">
+          <div class="eyebrow"><span class="pulse-dot"></span> TOP-DOWN SURVIVAL · 2D SHOOTER</div>
+          <h1 class="game-title">
+            <span class="title-line">吴卓远</span>
+            <span class="title-line title-accent">大战代牧豪</span>
+          </h1>
+          <p class="game-subtitle">WU ZHUOYUAN VS. DAI MUHAO</p>
+          <p class="game-desc">
+            你只是想安静地活下去。<br>
+            可你的好兄弟不这么想。拿好枪，升级火力，别被追上。
+          </p>
+
+          <div class="menu-buttons">
+            <button id="startSurvivalBtn" class="btn btn-primary mode-button" type="button">
+              <span class="mode-icon" aria-hidden="true">∞</span>
+              <span class="mode-copy"><strong>无限生存</strong><small>敌人无限变强，活到再也跑不动</small></span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+            <button id="startStageBtn" class="btn btn-secondary mode-button" type="button">
+              <span class="mode-icon" aria-hidden="true">▣</span>
+              <span class="mode-copy"><strong>关卡挑战</strong><small>完成击杀目标，每三关迎战 BOSS</small></span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+            <button id="instructionsBtn" class="btn btn-ghost" type="button">操作说明 / FIELD MANUAL</button>
+          </div>
+        </div>
+
+        <aside class="records-panel" aria-label="历史记录">
+          <div class="panel-heading">
+            <span>作战档案</span>
+            <span class="panel-tag">LOCAL</span>
+          </div>
+          <div class="record-grid">
+            <div class="record-item">
+              <span class="record-label">历史最高分</span>
+              <strong id="bestScore" class="record-value">0</strong>
+            </div>
+            <div class="record-item">
+              <span class="record-label">最长存活</span>
+              <strong id="bestTime" class="record-value">00:00</strong>
+            </div>
+            <div class="record-item">
+              <span class="record-label">最高等级</span>
+              <strong id="bestLevel" class="record-value">1</strong>
+            </div>
+            <div class="record-item">
+              <span class="record-label">累计击败</span>
+              <strong id="totalKills" class="record-value">0</strong>
+            </div>
+          </div>
+          <div class="records-divider"></div>
+          <div class="quick-controls">
+            <span><kbd>WASD</kbd> 移动</span>
+            <span><kbd>鼠标</kbd> 瞄准 / 射击</span>
+            <span><kbd>空格</kbd> 冲刺</span>
+            <span><kbd>ESC</kbd> 暂停</span>
+          </div>
+          <p class="save-note">记录与音效设置自动保存在本机 localStorage，不上传任何数据。</p>
+        </aside>
+      </div>
+      <div class="menu-footer">
+        <span>把追你的兄弟，统统劝退。</span>
+        <span class="menu-footer-version">v1.0 · CANVAS EDITION</span>
+      </div>
+    </section>
+
+    <!-- ===================== 升级 ===================== -->
+    <section id="upgradeScreen" class="screen overlay-screen upgrade-screen" aria-label="升级界面">
+      <div class="upgrade-shell">
+        <div class="upgrade-heading">
+          <p class="eyebrow">LEVEL UP · 战力提升</p>
+          <h2>选择一项强化</h2>
+          <p class="upgrade-sub" id="upgradeSub">游戏已暂停。每一次选择都会真实改变你的属性。</p>
+        </div>
+        <div id="upgradeCards" class="upgrade-cards"></div>
+        <p class="upgrade-hint">点击卡片，或按 <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> 选择</p>
+      </div>
+    </section>
+
+    <!-- ===================== 暂停 ===================== -->
+    <section id="pauseScreen" class="screen overlay-screen pause-screen" aria-label="暂停界面">
+      <div class="panel pause-panel">
+        <p class="eyebrow">TAKE A BREATH</p>
+        <h2>暂停一下</h2>
+        <p class="panel-sub" id="pauseMode">无限生存 · 游戏已暂停</p>
+        <div class="pause-stats">
+          <div><span>存活时间</span><strong id="pauseTime">00:00</strong></div>
+          <div><span>击败敌人</span><strong id="pauseKills">0</strong></div>
+          <div><span>当前等级</span><strong id="pauseLevel">1</strong></div>
+        </div>
+        <div class="panel-actions">
+          <button id="resumeBtn" class="btn btn-primary" type="button">继续游戏</button>
+          <button id="pauseRestartBtn" class="btn btn-secondary" type="button">重新开始</button>
+          <button id="pauseMenuBtn" class="btn btn-ghost" type="button">返回主菜单</button>
+        </div>
+        <p class="panel-tip">按 <kbd>ESC</kbd> 或 <kbd>P</kbd> 继续</p>
+      </div>
+    </section>
+
+    <!-- ===================== 结算 ===================== -->
+    <section id="gameOverScreen" class="screen overlay-screen gameover-screen" aria-label="游戏结算">
+      <div class="panel result-panel">
+        <p class="eyebrow danger">RUN TERMINATED</p>
+        <h2 id="resultTitle">你被追上了……</h2>
+        <p class="panel-sub" id="gameOverMode">无限生存 · 本局结束</p>
+        <div id="newRecordBadge" class="new-record" hidden>★ 新纪录</div>
+
+        <div class="result-score-wrap">
+          <span>最终得分</span>
+          <strong id="resultScore">0</strong>
+        </div>
+
+        <div class="result-stats">
+          <div><span>存活时间</span><strong id="resultTime">00:00</strong></div>
+          <div><span>击败敌人</span><strong id="resultKills">0</strong></div>
+          <div><span>最高等级</span><strong id="resultLevel">1</strong></div>
+          <div id="resultStageWrap"><span>到达关卡</span><strong id="resultStage">1</strong></div>
+        </div>
+
+        <p class="result-best" id="gameOverBest">历史最高分：0</p>
+
+        <div class="panel-actions row-actions">
+          <button id="restartBtn" class="btn btn-primary" type="button">重新开始</button>
+          <button id="gameOverMenuBtn" class="btn btn-secondary" type="button">返回主菜单</button>
+        </div>
+        <p class="result-quote">“下次，别追了。”</p>
+      </div>
+    </section>
+
+    <!-- ===================== 操作说明 ===================== -->
+    <div id="instructionsModal" class="modal" hidden>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="instructionsTitle">
+        <div class="modal-header">
+          <div>
+            <p class="eyebrow">FIELD MANUAL</p>
+            <h2 id="instructionsTitle">操作说明</h2>
+          </div>
+          <button id="closeInstructionsBtn" class="icon-button close-button" type="button" aria-label="关闭操作说明">×</button>
+        </div>
+
+        <div class="control-columns">
+          <section class="control-block">
+            <h3><span class="control-icon">⌨</span> 电脑端</h3>
+            <ul class="key-list">
+              <li><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><em>向任意方向移动</em></li>
+              <li><span><kbd>鼠标</kbd></span><em>瞄准，准星方向即子弹方向</em></li>
+              <li><span><kbd>鼠标左键</kbd></span><em>射击 / 按住连续射击</em></li>
+              <li><span><kbd>R</kbd></span><em>换弹</em></li>
+              <li><span><kbd>空格</kbd></span><em>冲刺（有冷却，冲刺时无敌）</em></li>
+              <li><span><kbd>1</kbd>—<kbd>5</kbd></span><em>切换已解锁的枪械</em></li>
+              <li><span><kbd>ESC</kbd> / <kbd>P</kbd></span><em>暂停 / 继续</em></li>
+            </ul>
+          </section>
+
+          <section class="control-block">
+            <h3><span class="control-icon">◉</span> 手机端</h3>
+            <ul class="key-list">
+              <li><span><kbd>左摇杆</kbd></span><em>移动</em></li>
+              <li><span><kbd>右摇杆</kbd></span><em>瞄准</em></li>
+              <li><span><kbd>射击</kbd></span><em>开火（未操作右摇杆时会辅助瞄准最近敌人）</em></li>
+              <li><span><kbd>换弹</kbd></span><em>手动装填</em></li>
+              <li><span><kbd>冲刺</kbd></span><em>短距离无敌位移</em></li>
+              <li><span><kbd>切枪</kbd></span><em>在已解锁枪械间循环切换</em></li>
+            </ul>
+          </section>
+        </div>
+
+        <div class="manual-note">
+          <strong>生存提示：</strong>击杀敌人会掉落经验球，升级时可在三张卡片中选择强化。数字键切换枪械时，未解锁的枪械无法使用。每隔一段时间会出现拥有独立血条的 BOSS。
+        </div>
+
+        <button id="instructionsDoneBtn" class="btn btn-primary modal-done" type="button">了解了，开跑</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================== 手机虚拟控制 ===================== -->
+  <div id="touchControls" class="touch-controls" aria-hidden="true">
+    <div id="moveJoystick" class="joystick move-joystick">
+      <div id="moveStick" class="joystick-base">
+        <span class="joystick-cross"></span>
+        <div id="moveKnob" class="joystick-knob"></div>
+      </div>
+      <span class="joystick-label">移动</span>
+    </div>
+
+    <div id="aimJoystick" class="joystick aim-joystick">
+      <div id="aimStick" class="joystick-base aim-base">
+        <span class="joystick-cross"></span>
+        <div id="aimKnob" class="joystick-knob"></div>
+      </div>
+      <span class="joystick-label">瞄准</span>
+    </div>
+
+    <div class="touch-actions">
+      <button id="fireBtn" class="touch-button fire-button" type="button" aria-label="射击">开火</button>
+      <button id="dashBtn" class="touch-button dash-button" type="button" aria-label="冲刺">冲刺</button>
+      <button id="reloadBtn" class="touch-button small-button reload-button" type="button" aria-label="换弹">换弹</button>
+      <button id="switchBtn" class="touch-button small-button switch-button" type="button" aria-label="切换枪械">切枪</button>
+    </div>
+  </div>
+
+  <script src="game.js?v=20261019-3" defer></script>
+</body>
+</html>
