@@ -1,5 +1,9 @@
 # 发布到 GitHub Pages
 
+已上线：https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/
+
+仓库：https://github.com/qianfanQQQ/wuzhuoyuan-vs-daimuhao
+
 项目目录：
 
 ```text

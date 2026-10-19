@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+  <url>
+    <loc>https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/assets/og-cover.png</image:loc>
+      <image:title>吴卓远大战代牧豪</image:title>
+      <image:caption>吴卓远大战代牧豪 — 2D 俯视角生存射击网页游戏</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/screenshots/desktop-gameplay.png</image:loc>
+      <image:title>吴卓远大战代牧豪游戏截图</image:title>
+    </image:image>
+  </url>
+</urlset>

@@ -1,5 +1,7 @@
 # 吴卓远大战代牧豪
 
+在线游玩：https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/
+
 一款使用原生 HTML / CSS / JavaScript 与 HTML5 Canvas 制作的 2D 俯视角生存射击网页游戏。
 
 - 无第三方框架

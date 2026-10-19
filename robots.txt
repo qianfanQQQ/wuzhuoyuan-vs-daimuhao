@@ -3,4 +3,4 @@ User-agent: *
 Allow: /
 Disallow:
 
-# 站点地图将在正式域名确定后写入 sitemap.xml
+Sitemap: https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/sitemap.xml
