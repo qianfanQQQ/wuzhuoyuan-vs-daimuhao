@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="pom-aura" cx="0.53" cy="0.5" r="0.55">
+      <stop offset="0" stop-color="#ff3b62" stop-opacity="0.55"/>
+      <stop offset="0.42" stop-color="#ff6d38" stop-opacity="0.2"/>
+      <stop offset="0.72" stop-color="#ffcf66" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ff3b62" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pom-body" x1="350" y1="410" x2="716" y2="628" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb08b"/>
+      <stop offset="0.18" stop-color="#ff6073"/>
+      <stop offset="0.52" stop-color="#d61d42"/>
+      <stop offset="0.82" stop-color="#8b0c2b"/>
+      <stop offset="1" stop-color="#4b0418"/>
+    </linearGradient>
+    <linearGradient id="pom-crown" x1="330" y1="440" x2="240" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd98a"/>
+      <stop offset="0.3" stop-color="#e04b38"/>
+      <stop offset="0.7" stop-color="#9e1d2c"/>
+      <stop offset="1" stop-color="#570b1e"/>
+    </linearGradient>
+    <linearGradient id="pom-leaf" x1="495" y1="382" x2="610" y2="336" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5c2b"/>
+      <stop offset="0.5" stop-color="#f3c85c"/>
+      <stop offset="1" stop-color="#6b3e1f"/>
+    </linearGradient>
+    <radialGradient id="pom-seed" cx="0.35" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#fff4df"/>
+      <stop offset="0.2" stop-color="#ff9b8d"/>
+      <stop offset="0.58" stop-color="#e91f4c"/>
+      <stop offset="1" stop-color="#6e0620"/>
+    </radialGradient>
+    <radialGradient id="pom-seed-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff86a0" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff2c51" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pom-edge" x1="680" y1="470" x2="770" y2="580" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff6e6"/>
+      <stop offset="0.4" stop-color="#ffd27e"/>
+      <stop offset="1" stop-color="#ff3f5f" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="pom-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="pom-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5"/>
+    </filter>
+    <clipPath id="pom-body-clip">
+      <path d="M 366 510 C 366 432 430 392 516 392 C 604 392 676 426 706 484 C 728 526 716 572 674 602 C 630 634 546 640 472 616 C 408 596 368 558 366 510 Z"/>
+    </clipPath>
+  </defs>
+
+  <ellipse cx="525" cy="512" rx="330" ry="198" fill="url(#pom-aura)"/>
+
+  <!-- speed streaks -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 132 512 C 242 480 318 452 402 462" stroke="#ff3b5f" stroke-width="8" opacity="0.16"/>
+    <path d="M 176 570 C 270 552 346 536 420 546" stroke="#ff9a6a" stroke-width="4" opacity="0.24"/>
+    <path d="M 202 440 C 286 418 352 408 422 424" stroke="#ffcf66" stroke-width="3" opacity="0.2"/>
+    <path d="M 118 486 C 204 456 260 438 326 442" stroke="#ff5574" stroke-width="2.5" opacity="0.14"/>
+  </g>
+
+  <!-- trailing seeds / juice -->
+  <g>
+    <circle cx="284" cy="470" r="9" fill="url(#pom-seed)" opacity="0.8"/>
+    <circle cx="284" cy="470" r="20" fill="url(#pom-seed-glow)" opacity="0.5"/>
+    <circle cx="246" cy="548" r="7" fill="url(#pom-seed)" opacity="0.65"/>
+    <circle cx="246" cy="548" r="16" fill="url(#pom-seed-glow)" opacity="0.4"/>
+    <circle cx="334" cy="590" r="5" fill="#ffb18e" opacity="0.6"/>
+    <path d="M 218 512 C 238 506 252 508 266 516" stroke="#ffcf66" stroke-width="3" fill="none" opacity="0.35"/>
+  </g>
+
+  <!-- pomegranate body -->
+  <g>
+    <path d="M 366 510 C 366 432 430 392 516 392 C 604 392 676 426 706 484 C 728 526 716 572 674 602 C 630 634 546 640 472 616 C 408 596 368 558 366 510 Z"
+          fill="url(#pom-body)" stroke="#5d071b" stroke-width="8"/>
+    <g clip-path="url(#pom-body-clip)">
+      <ellipse cx="438" cy="452" rx="104" ry="46" fill="#ffb596" opacity="0.3" filter="url(#pom-soft)"/>
+      <path d="M 390 576 C 476 626 590 632 668 600 C 634 630 552 646 470 624 C 424 612 400 596 390 576 Z" fill="#460316" opacity="0.6"/>
+      <path d="M 382 500 C 412 436 470 410 534 408" stroke="#ffd1b8" stroke-width="5" fill="none" opacity="0.55" stroke-linecap="round"/>
+      <path d="M 430 610 C 500 632 578 630 638 608" stroke="#ff7d66" stroke-width="4" fill="none" opacity="0.28" stroke-linecap="round"/>
+      <path d="M 502 410 C 540 446 548 482 526 520" stroke="#7c0a25" stroke-width="5" fill="none" opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- rear calyx / crown -->
+  <g>
+    <path d="M 378 470 C 334 446 292 434 252 436 C 280 462 304 480 326 498 C 292 502 264 512 242 526 C 274 536 304 548 332 564 C 310 584 298 602 300 624 C 336 606 360 586 378 558 Z"
+          fill="url(#pom-crown)" stroke="#ffd17b" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M 352 474 L 286 448 L 324 502 L 266 518 L 330 538 L 312 594 L 360 556" fill="none" stroke="#5c0b1d" stroke-width="3" opacity="0.55" stroke-linejoin="round"/>
+    <path d="M 350 486 C 326 474 306 466 288 462" stroke="#fff1ce" stroke-width="2.5" fill="none" opacity="0.7" stroke-linecap="round"/>
+  </g>
+
+  <!-- leaves on top -->
+  <g>
+    <path d="M 504 402 C 508 354 542 324 592 324 C 580 364 556 392 518 412 Z" fill="url(#pom-leaf)" opacity="0.9"/>
+    <path d="M 512 406 C 522 378 542 354 574 338" stroke="#fff0bf" stroke-width="2.5" fill="none" opacity="0.6"/>
+    <path d="M 556 402 C 574 366 608 346 646 352 C 626 384 600 404 562 416 Z" fill="url(#pom-leaf)" opacity="0.72"/>
+    <path d="M 570 408 C 590 386 610 372 630 364" stroke="#ffe6a0" stroke-width="2" fill="none" opacity="0.5"/>
+  </g>
+
+  <!-- split front with seeds -->
+  <g>
+    <path d="M 650 452 C 686 466 712 488 726 512 C 710 540 684 562 648 578 C 674 542 676 490 650 452 Z"
+          fill="#3b0413" stroke="#ffb381" stroke-width="4"/>
+    <path d="M 650 452 C 674 490 674 540 648 578" fill="none" stroke="#ffcf66" stroke-width="3" opacity="0.8"/>
+    <g>
+      <circle cx="670" cy="486" r="19" fill="url(#pom-seed-glow)"/>
+      <circle cx="670" cy="486" r="12" fill="url(#pom-seed)"/>
+      <ellipse cx="666" cy="481" rx="4" ry="3" fill="#fff7e9" opacity="0.9"/>
+      <circle cx="686" cy="512" r="22" fill="url(#pom-seed-glow)"/>
+      <circle cx="686" cy="512" r="14" fill="url(#pom-seed)"/>
+      <ellipse cx="681" cy="506" rx="5" ry="3.5" fill="#fff7e9" opacity="0.92"/>
+      <circle cx="666" cy="536" r="18" fill="url(#pom-seed-glow)"/>
+      <circle cx="666" cy="536" r="11" fill="url(#pom-seed)"/>
+      <ellipse cx="662" cy="532" rx="3.5" ry="2.5" fill="#fff7e9" opacity="0.9"/>
+      <circle cx="708" cy="532" r="13" fill="url(#pom-seed)"/>
+      <ellipse cx="704" cy="528" rx="4" ry="3" fill="#fff7e9" opacity="0.9"/>
+      <circle cx="714" cy="500" r="10" fill="url(#pom-seed)"/>
+    </g>
+    <path d="M 728 500 C 748 506 758 512 768 520" stroke="url(#pom-edge)" stroke-width="7" fill="none" stroke-linecap="round" opacity="0.9"/>
+  </g>
+
+  <!-- energy crown at the muzzle -->
+  <g opacity="0.85">
+    <path d="M 724 500 L 786 484 L 752 512 L 786 540 L 724 524" fill="none" stroke="#ffcf66" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M 742 512 L 806 512" stroke="#fff7e8" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="806" cy="512" r="9" fill="#fff5d1"/>
+    <circle cx="806" cy="512" r="26" fill="#ffcf66" opacity="0.2" filter="url(#pom-glow)"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#ffd98a">
+    <path d="M 240 408 L 247 427 L 266 434 L 247 441 L 240 460 L 233 441 L 214 434 L 233 427 Z" opacity="0.85"/>
+    <path d="M 764 430 L 769 443 L 782 448 L 769 453 L 764 466 L 759 453 L 746 448 L 759 443 Z" opacity="0.7"/>
+    <path d="M 360 626 L 364 637 L 375 641 L 364 645 L 360 656 L 356 645 L 345 641 L 356 637 Z" opacity="0.55"/>
+  </g>
+  <g fill="#ff7188">
+    <circle cx="730" cy="438" r="5" opacity="0.7"/>
+    <circle cx="782" cy="578" r="4" opacity="0.6"/>
+    <circle cx="294" cy="620" r="4.5" opacity="0.55"/>
+    <circle cx="322" cy="396" r="3.5" opacity="0.5"/>
+  </g>
+</svg>

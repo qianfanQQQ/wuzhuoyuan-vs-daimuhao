@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="bride-aura" cx="0.54" cy="0.5" r="0.56">
+      <stop offset="0" stop-color="#fff0f6" stop-opacity="0.5"/>
+      <stop offset="0.34" stop-color="#ffc7df" stop-opacity="0.25"/>
+      <stop offset="0.66" stop-color="#ffd27e" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#ffc7df" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bride-petal" x1="0" y1="-90" x2="160" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffdfd"/>
+      <stop offset="0.4" stop-color="#fff2f8"/>
+      <stop offset="0.74" stop-color="#ffc9df"/>
+      <stop offset="1" stop-color="#f39ac0"/>
+    </linearGradient>
+    <linearGradient id="bride-petal-inner" x1="0" y1="-55" x2="105" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.52" stop-color="#fff6fa"/>
+      <stop offset="1" stop-color="#ffd3e5"/>
+    </linearGradient>
+    <linearGradient id="bride-leaf" x1="360" y1="560" x2="500" y2="650" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c8eab3"/>
+      <stop offset="0.55" stop-color="#78b889"/>
+      <stop offset="1" stop-color="#39765c"/>
+    </linearGradient>
+    <radialGradient id="bride-core" cx="0.36" cy="0.3" r="0.75">
+      <stop offset="0" stop-color="#fffdf0"/>
+      <stop offset="0.4" stop-color="#ffe59a"/>
+      <stop offset="0.8" stop-color="#f2b54c"/>
+      <stop offset="1" stop-color="#b7701f"/>
+    </radialGradient>
+    <filter id="bride-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="15"/>
+    </filter>
+    <filter id="bride-soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <path id="bride-petal-shape" d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z"/>
+  </defs>
+
+  <ellipse cx="528" cy="512" rx="340" ry="205" fill="url(#bride-aura)"/>
+
+  <!-- light trails -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 114 512 C 226 482 318 462 410 466" stroke="#ffd8e7" stroke-width="7" opacity="0.24"/>
+    <path d="M 152 566 C 254 548 334 532 418 540" stroke="#fff4f8" stroke-width="4" opacity="0.28"/>
+    <path d="M 176 446 C 264 418 342 412 414 430" stroke="#ffcf66" stroke-width="2.5" opacity="0.2"/>
+    <path d="M 194 604 C 288 594 344 584 410 590" stroke="#ffc1da" stroke-width="3" opacity="0.18"/>
+  </g>
+
+  <!-- trailing petals -->
+  <g opacity="0.8">
+    <path d="M 278 468 C 300 432 340 420 370 438 C 348 468 316 486 282 486 Z" fill="url(#bride-petal)" stroke="#f6b8d1" stroke-width="2"/>
+    <path d="M 248 552 C 270 520 310 508 338 526 C 318 556 286 572 254 570 Z" fill="url(#bride-petal)" stroke="#f6b8d1" stroke-width="2" opacity="0.8"/>
+    <path d="M 334 610 C 356 584 390 576 412 590 C 392 614 364 628 338 624 Z" fill="url(#bride-petal)" stroke="#f6b8d1" stroke-width="2" opacity="0.7"/>
+    <circle cx="242" cy="514" r="8" fill="#ffd7e8" opacity="0.7"/>
+    <circle cx="242" cy="514" r="24" fill="#ffb7d3" opacity="0.22" filter="url(#bride-glow)"/>
+  </g>
+
+  <!-- leaves -->
+  <g>
+    <path d="M 454 560 C 406 574 362 604 338 646 C 390 644 438 620 468 586 Z" fill="url(#bride-leaf)" opacity="0.8"/>
+    <path d="M 456 566 C 426 588 402 612 388 634" stroke="#eaffdf" stroke-width="3" fill="none" opacity="0.45"/>
+    <path d="M 496 606 C 468 632 452 664 454 696 C 490 676 512 646 516 610 Z" fill="url(#bride-leaf)" opacity="0.55"/>
+  </g>
+
+  <!-- flower shadow -->
+  <ellipse cx="540" cy="524" rx="158" ry="140" fill="#a94d74" opacity="0.16" filter="url(#bride-soft)"/>
+
+  <!-- outer petals -->
+  <g transform="translate(540 512)" stroke="#efadd0" stroke-width="3" stroke-linejoin="round">
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(0)"/>
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(60)"/>
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(120)"/>
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(180)"/>
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(240)"/>
+    <path d="M 0 0 C 42 -68 108 -94 164 -28 C 144 26 82 68 0 0 Z" fill="url(#bride-petal)" transform="rotate(300)"/>
+  </g>
+
+  <!-- intermediate petals -->
+  <g transform="translate(540 512) rotate(30)" stroke="#ffe2ee" stroke-width="2" stroke-linejoin="round" opacity="0.95">
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(0)"/>
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(60)"/>
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(120)"/>
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(180)"/>
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(240)"/>
+    <path d="M 0 0 C 35 -57 90 -78 136 -23 C 118 22 68 57 0 0 Z" fill="#fff7fb" transform="rotate(300)"/>
+  </g>
+
+  <!-- petal veins -->
+  <g transform="translate(540 512)" fill="none" stroke="#e99bbb" stroke-width="2" opacity="0.45" stroke-linecap="round">
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(0)"/>
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(60)"/>
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(120)"/>
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(180)"/>
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(240)"/>
+    <path d="M 18 0 C 54 -16 94 -22 132 -10" transform="rotate(300)"/>
+  </g>
+
+  <!-- inner petals -->
+  <g transform="translate(540 512) rotate(30)" stroke="#ffd9e8" stroke-width="2.2" stroke-linejoin="round">
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(0)"/>
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(60)"/>
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(120)"/>
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(180)"/>
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(240)"/>
+    <path d="M 0 0 C 30 -48 76 -66 112 -20 C 98 18 56 48 0 0 Z" fill="url(#bride-petal-inner)" transform="rotate(300)"/>
+  </g>
+
+  <!-- bright leading petal / floral lance -->
+  <g>
+    <path d="M 570 512 C 630 482 696 474 760 492 C 726 500 700 510 678 522 C 646 544 610 548 578 534 Z"
+          fill="#fffafc" opacity="0.92" filter="url(#bride-soft)"/>
+    <path d="M 580 512 C 628 492 680 486 726 496" stroke="#ffffff" stroke-width="4" fill="none" opacity="0.92" stroke-linecap="round"/>
+    <path d="M 736 498 L 820 512 L 736 526 L 758 512 Z" fill="#fffdf5"/>
+    <path d="M 736 498 L 806 512 L 736 526" fill="none" stroke="#ffe5a3" stroke-width="3" stroke-linejoin="round"/>
+    <circle cx="820" cy="512" r="9" fill="#fffdf5"/>
+    <circle cx="820" cy="512" r="29" fill="#ffd7e8" opacity="0.26" filter="url(#bride-glow)"/>
+    <path d="M 620 512 C 660 504 700 504 736 512" stroke="#ffd6e8" stroke-width="2" fill="none" opacity="0.8"/>
+  </g>
+
+  <!-- golden core -->
+  <g>
+    <circle cx="540" cy="512" r="36" fill="url(#bride-core)" stroke="#fff1c9" stroke-width="4"/>
+    <circle cx="540" cy="512" r="19" fill="#fff8dc" opacity="0.62"/>
+    <g stroke="#ffe6a1" stroke-width="3" stroke-linecap="round" opacity="0.9">
+      <path d="M 540 466 L 540 442"/>
+      <path d="M 540 558 L 540 582"/>
+      <path d="M 494 512 L 470 512"/>
+      <path d="M 586 512 L 610 512"/>
+      <path d="M 508 480 L 492 464"/>
+      <path d="M 572 544 L 588 560"/>
+      <path d="M 572 480 L 588 464"/>
+      <path d="M 508 544 L 492 560"/>
+    </g>
+    <g fill="#fff5c9">
+      <circle cx="540" cy="438" r="5"/>
+      <circle cx="540" cy="586" r="5"/>
+      <circle cx="466" cy="512" r="5"/>
+      <circle cx="614" cy="512" r="5"/>
+      <circle cx="490" cy="462" r="4"/>
+      <circle cx="590" cy="562" r="4"/>
+      <circle cx="590" cy="462" r="4"/>
+      <circle cx="490" cy="562" r="4"/>
+    </g>
+  </g>
+
+  <!-- sparkles and pollen -->
+  <g fill="#ffe7b0">
+    <path d="M 336 402 L 342 421 L 361 427 L 342 433 L 336 452 L 330 433 L 311 427 L 330 421 Z" opacity="0.8"/>
+    <path d="M 736 388 L 741 403 L 756 408 L 741 413 L 736 428 L 731 413 L 716 408 L 731 403 Z" opacity="0.65"/>
+    <path d="M 774 600 L 778 611 L 789 615 L 778 619 L 774 630 L 770 619 L 759 615 L 770 611 Z" opacity="0.55"/>
+    <circle cx="322" cy="570" r="4" opacity="0.65"/>
+    <circle cx="392" cy="430" r="3.5" opacity="0.6"/>
+    <circle cx="708" cy="620" r="4" opacity="0.55"/>
+    <circle cx="760" cy="450" r="3" opacity="0.65"/>
+  </g>
+</svg>

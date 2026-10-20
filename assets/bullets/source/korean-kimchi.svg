@@ -1,0 +1,169 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="kimchi-aura" cx="0.53" cy="0.5" r="0.56">
+      <stop offset="0" stop-color="#ff6a2e" stop-opacity="0.52"/>
+      <stop offset="0.4" stop-color="#ffb13e" stop-opacity="0.2"/>
+      <stop offset="0.7" stop-color="#5de1ff" stop-opacity="0.09"/>
+      <stop offset="1" stop-color="#ff5b2e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="kimchi-paste" x1="330" y1="420" x2="776" y2="620" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc553"/>
+      <stop offset="0.18" stop-color="#ff7e2b"/>
+      <stop offset="0.48" stop-color="#e44427"/>
+      <stop offset="0.78" stop-color="#b32520"/>
+      <stop offset="1" stop-color="#741218"/>
+    </linearGradient>
+    <linearGradient id="kimchi-rib" x1="300" y1="550" x2="772" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffdf0"/>
+      <stop offset="0.38" stop-color="#f1f3c8"/>
+      <stop offset="0.72" stop-color="#c9de91"/>
+      <stop offset="1" stop-color="#eef3b7"/>
+    </linearGradient>
+    <linearGradient id="kimchi-underleaf" x1="340" y1="530" x2="700" y2="650" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffbe0"/>
+      <stop offset="0.42" stop-color="#d9e89b"/>
+      <stop offset="0.78" stop-color="#8fb961"/>
+      <stop offset="1" stop-color="#4c7d3d"/>
+    </linearGradient>
+    <linearGradient id="kimchi-green" x1="238" y1="390" x2="420" y2="520" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e2f79c"/>
+      <stop offset="0.45" stop-color="#82c05d"/>
+      <stop offset="1" stop-color="#356d3b"/>
+    </linearGradient>
+    <linearGradient id="kimchi-chili" x1="500" y1="380" x2="680" y2="452" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffd05a"/>
+      <stop offset="0.25" stop-color="#ff6a2d"/>
+      <stop offset="0.7" stop-color="#ce241e"/>
+      <stop offset="1" stop-color="#7e1015"/>
+    </linearGradient>
+    <filter id="kimchi-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="kimchi-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="520" cy="512" rx="342" ry="202" fill="url(#kimchi-aura)"/>
+
+  <!-- motion streaks -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 120 516 C 230 480 312 458 400 466" stroke="#ff7c2e" stroke-width="7" opacity="0.2"/>
+    <path d="M 164 572 C 260 554 342 540 424 548" stroke="#ffb35a" stroke-width="4" opacity="0.26"/>
+    <path d="M 174 442 C 262 414 332 408 408 426" stroke="#5de1ff" stroke-width="2.5" opacity="0.24"/>
+    <path d="M 126 486 C 214 454 276 440 344 444" stroke="#ff4c2c" stroke-width="2.5" opacity="0.15"/>
+  </g>
+
+  <!-- loose chili oil and sesame -->
+  <g>
+    <circle cx="252" cy="470" r="8" fill="#ff8b36" opacity="0.75"/>
+    <circle cx="252" cy="470" r="22" fill="#ff5d26" opacity="0.25" filter="url(#kimchi-glow)"/>
+    <circle cx="214" cy="552" r="5" fill="#ffcf66" opacity="0.7"/>
+    <circle cx="314" cy="608" r="6" fill="#ff7931" opacity="0.6"/>
+    <ellipse cx="286" cy="510" rx="7" ry="3.5" fill="#fff2c8" opacity="0.75" transform="rotate(-26 286 510)"/>
+    <ellipse cx="230" cy="518" rx="5" ry="2.5" fill="#fff2c8" opacity="0.55" transform="rotate(18 230 518)"/>
+  </g>
+
+  <!-- pale folded underside, only lower-left -->
+  <g>
+    <path d="M 352 558 C 402 606 464 632 528 638 C 578 642 614 632 648 618 C 604 648 544 658 482 644 C 422 630 378 602 352 576 Z"
+          fill="url(#kimchi-underleaf)" stroke="#3f672f" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M 384 586 C 442 624 502 640 562 640" fill="none" stroke="#fff9d6" stroke-width="8" opacity="0.6" stroke-linecap="round"/>
+    <path d="M 432 614 C 482 634 534 638 582 630" fill="none" stroke="#7ea957" stroke-width="4" opacity="0.45" stroke-linecap="round"/>
+  </g>
+
+  <!-- main napa leaf: red paste is the leaf surface, no green rind outline -->
+  <g>
+    <path d="M 302 514 C 318 464 356 428 408 408 C 462 388 522 390 578 404 C 640 420 700 450 750 486 C 776 502 796 516 790 534 C 782 554 758 566 732 576 C 704 586 674 594 644 590 C 616 586 592 604 564 610 C 518 620 478 612 440 600 C 390 586 352 562 322 538 C 306 526 296 520 302 514 Z"
+          fill="url(#kimchi-paste)" stroke="#681018" stroke-width="7"/>
+    <path d="M 342 500 C 386 448 450 426 522 430 C 596 434 662 458 722 494 C 752 512 770 528 760 540 C 738 558 702 568 668 578 C 634 588 608 582 580 592 C 534 608 486 608 442 592 C 400 578 368 556 346 532 C 332 518 330 510 342 500 Z"
+          fill="url(#kimchi-paste)" opacity="0.55"/>
+    <path d="M 336 502 C 366 456 408 432 452 420 C 436 448 418 478 412 510 C 386 516 356 514 336 502 Z" fill="url(#kimchi-green)" opacity="0.95"/>
+    <path d="M 446 604 C 494 620 548 620 594 604 C 616 596 642 596 664 602 C 634 622 592 634 544 636 C 506 636 474 624 446 604 Z" fill="url(#kimchi-underleaf)" opacity="0.9"/>
+    <path d="M 688 456 C 722 444 758 448 780 464 C 752 466 728 478 708 492 Z" fill="#79a854" opacity="0.9"/>
+    <path d="M 688 588 C 722 600 758 594 778 578 C 750 578 726 570 706 556 Z" fill="#5f8e45" opacity="0.85"/>
+    <!-- broad pale cabbage stem at the front -->
+    <path d="M 734 488 C 760 492 784 502 792 518 C 786 538 764 552 736 562 C 754 544 758 514 734 488 Z"
+          fill="url(#kimchi-rib)" stroke="#b6cd7b" stroke-width="2" opacity="0.9"/>
+    <!-- thick rib across the leaf -->
+    <path d="M 338 548 C 432 562 528 548 620 528 C 678 516 724 512 770 518 C 730 536 680 544 626 554 C 540 572 442 582 360 568 Z"
+          fill="url(#kimchi-rib)" stroke="#a9c26f" stroke-width="2" opacity="0.95"/>
+    <path d="M 360 554 C 444 560 526 550 606 536 C 660 528 704 522 744 524" fill="none" stroke="#fffdf0" stroke-width="5" opacity="0.7" stroke-linecap="round"/>
+    <!-- branching cabbage ribs -->
+    <path d="M 402 456 C 458 480 520 490 584 480 C 634 472 676 460 712 448" fill="none" stroke="#fff4c9" stroke-width="11" opacity="0.35" stroke-linecap="round"/>
+    <path d="M 408 456 C 462 478 520 486 580 478" fill="none" stroke="#fffdf0" stroke-width="4" opacity="0.45" stroke-linecap="round"/>
+    <path d="M 500 440 C 514 472 518 502 512 532" fill="none" stroke="#ffefb9" stroke-width="7" opacity="0.3" stroke-linecap="round"/>
+    <!-- folds and gloss -->
+    <path d="M 420 570 C 478 550 542 538 610 536" fill="none" stroke="#75151a" stroke-width="10" opacity="0.22" stroke-linecap="round"/>
+    <ellipse cx="470" cy="486" rx="46" ry="15" fill="#ffb14b" opacity="0.28" transform="rotate(-14 470 486)"/>
+    <ellipse cx="644" cy="540" rx="34" ry="11" fill="#ff7f35" opacity="0.22" transform="rotate(10 644 540)"/>
+    <path d="M 384 520 C 424 504 464 496 504 496" fill="none" stroke="#fff3c8" stroke-width="4" opacity="0.25" stroke-linecap="round"/>
+  </g>
+
+  <!-- pale cabbage base / stem fan at the rear -->
+  <g>
+    <path d="M 330 512 C 300 484 280 456 280 424 C 312 444 338 470 356 496 C 346 502 336 508 330 512 Z" fill="url(#kimchi-rib)" stroke="#5b7f3f" stroke-width="4"/>
+    <path d="M 326 520 C 290 508 260 490 238 466 C 274 466 306 480 334 500 Z" fill="url(#kimchi-underleaf)" opacity="0.9"/>
+    <path d="M 320 500 C 294 478 278 456 272 434" stroke="#fffbe0" stroke-width="6" fill="none" opacity="0.7" stroke-linecap="round"/>
+    <path d="M 320 516 C 294 508 270 496 252 480" stroke="#e2f0a7" stroke-width="5" fill="none" opacity="0.7" stroke-linecap="round"/>
+    <path d="M 338 478 C 316 452 304 424 306 396 C 330 420 348 446 356 472 Z" fill="url(#kimchi-green)" stroke="#315f2e" stroke-width="3"/>
+    <path d="M 334 482 C 320 456 312 434 312 414" stroke="#e8ffb0" stroke-width="3" fill="none" opacity="0.6"/>
+  </g>
+
+  <!-- green onion garnish -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 430 402 C 454 374 480 356 512 348" stroke="#5f9a4b" stroke-width="9" opacity="0.9"/>
+    <path d="M 460 404 C 486 382 512 370 540 366" stroke="#8bc66a" stroke-width="6" opacity="0.8"/>
+    <path d="M 448 390 C 462 374 476 364 492 358" stroke="#d7f2a1" stroke-width="3" opacity="0.6"/>
+    <path d="M 512 348 C 526 336 540 330 554 330" stroke="#4e853e" stroke-width="7"/>
+  </g>
+
+  <!-- curved chili slice garnish -->
+  <g transform="translate(574 424) rotate(-14)">
+    <path d="M -38 2 C -30 -20 -8 -32 16 -26 C 32 -22 44 -10 48 2 C 32 -2 18 2 4 12 C -12 18 -28 14 -38 2 Z"
+          fill="url(#kimchi-chili)" stroke="#7c1216" stroke-width="4"/>
+    <path d="M -28 0 C -12 -12 10 -14 30 -4" fill="none" stroke="#ffd47a" stroke-width="4" opacity="0.65" stroke-linecap="round"/>
+    <g fill="#ffe2a0">
+      <circle cx="-8" cy="-4" r="3"/>
+      <circle cx="7" cy="2" r="3"/>
+      <circle cx="20" cy="0" r="2.6"/>
+      <circle cx="32" cy="-4" r="2.2"/>
+    </g>
+  </g>
+
+  <!-- sesame seeds and chili flakes -->
+  <g fill="#fff4d1" stroke="#c69a50" stroke-width="1.2">
+    <ellipse cx="430" cy="480" rx="8" ry="4" transform="rotate(-24 430 480)"/>
+    <ellipse cx="484" cy="522" rx="7" ry="3.5" transform="rotate(14 484 522)"/>
+    <ellipse cx="586" cy="474" rx="8" ry="4" transform="rotate(-34 586 474)"/>
+    <ellipse cx="636" cy="528" rx="7" ry="3.5" transform="rotate(22 636 528)"/>
+    <ellipse cx="694" cy="500" rx="6" ry="3" transform="rotate(-16 694 500)"/>
+    <ellipse cx="378" cy="522" rx="6" ry="3" transform="rotate(28 378 522)"/>
+    <ellipse cx="542" cy="448" rx="6" ry="3" transform="rotate(-20 542 448)"/>
+    <ellipse cx="456" cy="566" rx="6" ry="3" transform="rotate(12 456 566)"/>
+  </g>
+  <g fill="#ffb13e" opacity="0.7">
+    <circle cx="560" cy="492" r="3"/>
+    <circle cx="610" cy="514" r="2.5"/>
+    <circle cx="674" cy="474" r="3"/>
+    <circle cx="704" cy="548" r="2.5"/>
+    <circle cx="402" cy="546" r="2.5"/>
+  </g>
+
+  <!-- leading edge / cool accent -->
+  <g>
+    <path d="M 756 496 C 776 504 792 512 806 520" fill="none" stroke="#7df2ff" stroke-width="5" opacity="0.4" stroke-linecap="round"/>
+    <path d="M 780 512 L 814 512" stroke="#fff6df" stroke-width="4" stroke-linecap="round" opacity="0.85"/>
+    <circle cx="814" cy="512" r="7" fill="#fff6df"/>
+    <circle cx="814" cy="512" r="24" fill="#ff9c3e" opacity="0.22" filter="url(#kimchi-glow)"/>
+  </g>
+
+  <!-- flying flakes -->
+  <g>
+    <path d="M 712 414 C 728 400 744 396 760 402 C 744 414 728 422 714 424 Z" fill="#ffb346" opacity="0.7"/>
+    <path d="M 760 584 C 776 576 792 578 804 588 C 786 596 770 598 754 594 Z" fill="#ff7432" opacity="0.6"/>
+    <circle cx="760" cy="444" r="4.5" fill="#5de1ff" opacity="0.6"/>
+    <circle cx="790" cy="558" r="4" fill="#ffcf66" opacity="0.65"/>
+    <path d="M 336 622 L 340 634 L 352 638 L 340 642 L 336 654 L 332 642 L 320 638 L 332 634 Z" fill="#ffe6aa" opacity="0.55"/>
+  </g>
+</svg>

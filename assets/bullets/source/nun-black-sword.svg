@@ -1,0 +1,141 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <radialGradient id="nun-aura" cx="0.55" cy="0.5" r="0.58">
+      <stop offset="0" stop-color="#b8a2ff" stop-opacity="0.48"/>
+      <stop offset="0.36" stop-color="#7f5cff" stop-opacity="0.2"/>
+      <stop offset="0.68" stop-color="#1a0f2f" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#b8a2ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="nun-blade" x1="390" y1="480" x2="770" y2="544" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#171122"/>
+      <stop offset="0.32" stop-color="#2b1d42"/>
+      <stop offset="0.66" stop-color="#0b0812"/>
+      <stop offset="1" stop-color="#33224f"/>
+    </linearGradient>
+    <linearGradient id="nun-bevel" x1="390" y1="484" x2="790" y2="514" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#a992d9"/>
+      <stop offset="0.4" stop-color="#f1eaff"/>
+      <stop offset="0.72" stop-color="#9b82cf"/>
+      <stop offset="1" stop-color="#e8dcff"/>
+    </linearGradient>
+    <linearGradient id="nun-edge" x1="390" y1="538" x2="790" y2="514" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7c5cff"/>
+      <stop offset="0.45" stop-color="#c7b3ff"/>
+      <stop offset="0.78" stop-color="#7048e8"/>
+      <stop offset="1" stop-color="#fff8ff"/>
+    </linearGradient>
+    <linearGradient id="nun-guard" x1="288" y1="430" x2="404" y2="596" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#efe6ff"/>
+      <stop offset="0.3" stop-color="#72638c"/>
+      <stop offset="0.55" stop-color="#20182e"/>
+      <stop offset="0.78" stop-color="#8e78b3"/>
+      <stop offset="1" stop-color="#352445"/>
+    </linearGradient>
+    <linearGradient id="nun-grip" x1="300" y1="498" x2="360" y2="526" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17111f"/>
+      <stop offset="0.45" stop-color="#3b2a4d"/>
+      <stop offset="1" stop-color="#110b19"/>
+    </linearGradient>
+    <radialGradient id="nun-gem" cx="0.35" cy="0.28" r="0.8">
+      <stop offset="0" stop-color="#fffaff"/>
+      <stop offset="0.25" stop-color="#d9c7ff"/>
+      <stop offset="0.62" stop-color="#8e67ff"/>
+      <stop offset="1" stop-color="#3b187b"/>
+    </radialGradient>
+    <linearGradient id="nun-feather" x1="170" y1="460" x2="350" y2="570" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#140d22" stop-opacity="0"/>
+      <stop offset="0.55" stop-color="#2a1b43" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#b8a2ff" stop-opacity="0.55"/>
+    </linearGradient>
+    <filter id="nun-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="16"/>
+    </filter>
+    <filter id="nun-soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+    <clipPath id="nun-blade-clip">
+      <path d="M 388 476 L 690 492 L 804 512 L 690 532 L 388 548 L 360 512 Z"/>
+    </clipPath>
+  </defs>
+
+  <ellipse cx="530" cy="512" rx="350" ry="210" fill="url(#nun-aura)"/>
+
+  <!-- spectral cross halo -->
+  <g opacity="0.2" filter="url(#nun-soft)">
+    <path d="M 358 316 L 386 316 L 386 458 L 486 458 L 486 486 L 386 486 L 386 664 L 358 664 L 358 486 L 258 486 L 258 458 L 358 458 Z" fill="#b8a2ff"/>
+  </g>
+
+  <!-- motion streaks -->
+  <g fill="none" stroke-linecap="round">
+    <path d="M 104 512 C 210 478 288 458 360 462" stroke="#7c5cff" stroke-width="7" opacity="0.22"/>
+    <path d="M 142 566 C 238 548 308 534 378 542" stroke="#b8a2ff" stroke-width="4" opacity="0.25"/>
+    <path d="M 162 446 C 246 420 314 412 382 428" stroke="#ded2ff" stroke-width="2.5" opacity="0.2"/>
+    <path d="M 116 484 C 208 450 270 438 334 440" stroke="#4b2b8c" stroke-width="3" opacity="0.35"/>
+  </g>
+
+  <!-- trailing dark feathers -->
+  <g>
+    <path d="M 300 468 C 232 430 178 426 136 448 C 194 466 238 490 276 516 C 252 472 270 466 300 468 Z" fill="url(#nun-feather)"/>
+    <path d="M 292 554 C 222 584 174 622 154 662 C 210 640 256 626 306 614 C 274 598 274 574 292 554 Z" fill="url(#nun-feather)" opacity="0.8"/>
+    <path d="M 238 500 C 196 492 164 500 144 514 C 180 522 210 532 244 548" fill="none" stroke="#c9b7ff" stroke-width="3" opacity="0.35"/>
+  </g>
+
+  <!-- blade glow underlay -->
+  <path d="M 380 470 L 692 488 L 812 512 L 692 536 L 380 554 L 348 512 Z" fill="#8f6cff" opacity="0.26" filter="url(#nun-glow)"/>
+
+  <!-- blade -->
+  <g>
+    <path d="M 388 476 L 690 492 L 804 512 L 690 532 L 388 548 L 360 512 Z"
+          fill="url(#nun-blade)" stroke="#0a0611" stroke-width="6" stroke-linejoin="round"/>
+    <g clip-path="url(#nun-blade-clip)">
+      <path d="M 388 486 L 690 498 L 792 512 L 690 506 L 388 506 Z" fill="url(#nun-bevel)" opacity="0.9"/>
+      <path d="M 396 518 L 690 518 L 778 512 L 690 524 L 396 536 Z" fill="#130c20" opacity="0.9"/>
+      <path d="M 396 536 L 690 526 L 790 512" fill="none" stroke="url(#nun-edge)" stroke-width="8" stroke-linecap="round"/>
+      <path d="M 400 512 L 760 512" fill="none" stroke="#6f52ae" stroke-width="2" opacity="0.5"/>
+      <path d="M 424 500 C 510 500 610 506 704 512" fill="none" stroke="#fffaff" stroke-width="2.5" opacity="0.65"/>
+      <path d="M 650 496 L 770 512 L 650 526 L 676 512 Z" fill="#f6efff" opacity="0.23" filter="url(#nun-soft)"/>
+    </g>
+    <path d="M 790 504 L 822 512 L 790 520" fill="#f6efff" stroke="#ffffff" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="822" cy="512" r="7" fill="#ffffff"/>
+    <circle cx="822" cy="512" r="26" fill="#b8a2ff" opacity="0.25" filter="url(#nun-glow)"/>
+  </g>
+
+  <!-- cross guard -->
+  <g>
+    <path d="M 384 472 C 354 432 314 420 282 432 C 310 464 338 492 358 512 C 336 528 308 556 278 590 C 314 602 356 588 386 548 L 404 548 L 404 472 Z"
+          fill="url(#nun-guard)" stroke="#171021" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M 382 480 C 350 448 322 438 300 442" fill="none" stroke="#fff8ff" stroke-width="3" opacity="0.7" stroke-linecap="round"/>
+    <path d="M 380 544 C 350 570 322 582 298 580" fill="none" stroke="#d4c1ff" stroke-width="3" opacity="0.55" stroke-linecap="round"/>
+    <path d="M 362 486 L 392 486 L 392 538 L 362 538 Z" fill="#21172f" stroke="#b8a2ff" stroke-width="2"/>
+    <path d="M 377 472 L 404 512 L 377 552 L 350 512 Z" fill="url(#nun-gem)" stroke="#efe6ff" stroke-width="3"/>
+    <path d="M 377 486 L 390 512 L 377 538 L 364 512 Z" fill="#f4edff" opacity="0.4"/>
+    <circle cx="377" cy="512" r="34" fill="#8d67ff" opacity="0.25" filter="url(#nun-glow)"/>
+  </g>
+
+  <!-- grip and pommel -->
+  <g>
+    <path d="M 300 500 L 360 496 L 366 528 L 302 532 Z" fill="url(#nun-grip)" stroke="#0e0916" stroke-width="4"/>
+    <g stroke="#b9a8d8" stroke-width="3" opacity="0.55" stroke-linecap="round">
+      <path d="M 312 501 L 318 528"/>
+      <path d="M 330 499 L 336 527"/>
+      <path d="M 348 498 L 354 526"/>
+    </g>
+    <circle cx="284" cy="514" r="24" fill="#20172e" stroke="#9d86c9" stroke-width="5"/>
+    <circle cx="284" cy="514" r="12" fill="url(#nun-gem)"/>
+    <circle cx="284" cy="514" r="3" fill="#fffaff"/>
+  </g>
+
+  <!-- runes / sparks -->
+  <g fill="#d7caff">
+    <path d="M 438 438 L 443 452 L 457 457 L 443 462 L 438 476 L 433 462 L 419 457 L 433 452 Z" opacity="0.7"/>
+    <path d="M 724 414 L 728 425 L 739 429 L 728 433 L 724 444 L 720 433 L 709 429 L 720 425 Z" opacity="0.65"/>
+    <path d="M 764 590 L 768 601 L 779 605 L 768 609 L 764 620 L 760 609 L 749 605 L 760 601 Z" opacity="0.55"/>
+    <circle cx="470" cy="590" r="4" opacity="0.5"/>
+    <circle cx="690" cy="448" r="3.5" opacity="0.55"/>
+    <circle cx="710" cy="572" r="4" opacity="0.5"/>
+  </g>
+  <g fill="none" stroke="#a98cff" stroke-width="2" opacity="0.35" stroke-linecap="round">
+    <path d="M 420 446 C 460 438 510 438 548 446"/>
+    <path d="M 446 584 C 494 596 552 592 598 576"/>
+  </g>
+</svg>

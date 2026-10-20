@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "canvas": 512,
+  "orientation": "right",
+  "anchor": "center",
+  "defaultSkin": "edg",
+  "defaultEffect": "unchanged",
+  "skins": {
+    "edg2026": {
+      "skinName": "EDG2026冠军赛限定",
+      "effect": "pomegranate",
+      "effectName": "石榴子弹",
+      "file": "edg2026-pomegranate.png",
+      "hires": "hires/edg2026-pomegranate-1024.png",
+      "source": "source/edg2026-pomegranate.svg"
+    },
+    "korean": {
+      "skinName": "韩国欧巴",
+      "effect": "kimchi",
+      "effectName": "泡菜子弹",
+      "file": "korean-kimchi.png",
+      "hires": "hires/korean-kimchi-1024.png",
+      "source": "source/korean-kimchi.svg"
+    },
+    "bride": {
+      "skinName": "纯白花嫁",
+      "effect": "flower",
+      "effectName": "鲜花子弹",
+      "file": "bride-flower.png",
+      "hires": "hires/bride-flower-1024.png",
+      "source": "source/bride-flower.svg"
+    },
+    "nun": {
+      "skinName": "特蕾拉修女",
+      "effect": "blackSword",
+      "effectName": "黑色剑子弹",
+      "file": "nun-black-sword.png",
+      "hires": "hires/nun-black-sword-1024.png",
+      "source": "source/nun-black-sword.svg"
+    }
+  }
+}
