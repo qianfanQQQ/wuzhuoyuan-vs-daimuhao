@@ -824,8 +824,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-9';
-  const BULLET_VERSION = '20261020-9';
+  const AVATAR_VERSION = '20261020-10';
+  const BULLET_VERSION = '20261020-10';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -6658,10 +6658,6 @@
     if (theme === 'desert') {
       ctx.fillStyle = '#c8954e';
       ctx.fillRect(0, 0, MAP.w, MAP.h);
-      ctx.fillStyle = 'rgba(226, 178, 95, 0.28)';
-      for (let y = Math.floor(top / 190) * 190; y < bottom; y += 190) {
-        ctx.fillRect(left, y, width, 34);
-      }
       for (let y = Math.floor(top / 78) * 78; y < bottom; y += 78) {
         for (let x = Math.floor(left / 78) * 78; x < right; x += 78) {
           const h = stageHash(seed, x, y, 11);
@@ -6707,18 +6703,6 @@
           }
         }
       }
-      ctx.strokeStyle = 'rgba(255, 233, 174, 0.16)';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i += 1) {
-        ctx.beginPath();
-        const waveY = camY + view.h * (0.54 + i * 0.11) + Math.sin(time * 0.8 + i) * 5;
-        for (let x = left; x <= right; x += 28) {
-          const y = waveY + Math.sin(x * 0.018 + time * 1.2 + i) * 4;
-          if (x === left) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
       const dustCount = Math.min(34, Math.floor(width * height / 26000));
       for (let i = 0; i < dustCount; i += 1) {
         const h = stageHash(seed, i, 4, 61);
@@ -6731,10 +6715,6 @@
     } else if (theme === 'snow') {
       ctx.fillStyle = '#b9d7e7';
       ctx.fillRect(0, 0, MAP.w, MAP.h);
-      ctx.fillStyle = 'rgba(236, 249, 255, 0.4)';
-      for (let y = Math.floor(top / 150) * 150; y < bottom; y += 150) {
-        ctx.fillRect(left, y, width, 22);
-      }
       for (let y = Math.floor(top / 96) * 96; y < bottom; y += 96) {
         for (let x = Math.floor(left / 96) * 96; x < right; x += 96) {
           const h = stageHash(seed, x, y, 12);
@@ -6827,10 +6807,6 @@
     } else if (theme === 'grass') {
       ctx.fillStyle = '#5f9e50';
       ctx.fillRect(0, 0, MAP.w, MAP.h);
-      ctx.fillStyle = 'rgba(145, 193, 92, 0.26)';
-      for (let y = Math.floor(top / 130) * 130; y < bottom; y += 130) {
-        ctx.fillRect(left, y, width, 28);
-      }
       for (let y = Math.floor(top / 84) * 84; y < bottom; y += 84) {
         for (let x = Math.floor(left / 84) * 84; x < right; x += 84) {
           const h = stageHash(seed, x, y, 13);
@@ -6845,16 +6821,22 @@
       sky.addColorStop(1, 'rgba(117, 190, 228, 0)');
       ctx.fillStyle = sky;
       ctx.fillRect(camX - 80, camY - 80, view.w + 160, 190);
+      const mountainBase = camY + 96;
+      const mountainLeft = camX - 80;
+      const mountainRight = camX + view.w + 80;
+      const mountainStep = 96;
       ctx.fillStyle = '#587b69';
       ctx.beginPath();
-      ctx.moveTo(camX - 40, camY + 92);
-      for (let x = camX - 40; x <= camX + view.w + 40; x += 76) {
-        const peak = 28 + stageHash(seed, x, 0, 33) * 40;
-        ctx.lineTo(x, camY + 92 - peak);
-        ctx.lineTo(x + 38, camY + 92);
+      ctx.moveTo(mountainLeft, mountainBase + 8);
+      for (let i = 0; i * mountainStep <= view.w + 240; i += 1) {
+        const x = mountainLeft + i * mountainStep;
+        const peak = 28 + stageHash(seed, i, 0, 33) * 40;
+        ctx.lineTo(x + 18, mountainBase + 8);
+        ctx.lineTo(x + 48, mountainBase - peak);
+        ctx.lineTo(x + 78, mountainBase + 8);
+        if (x + 78 > mountainRight) break;
       }
-      ctx.lineTo(camX + view.w + 80, camY + 100);
-      ctx.lineTo(camX - 80, camY + 100);
+      ctx.lineTo(mountainRight, mountainBase + 8);
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = 'rgba(235, 250, 255, 0.55)';
@@ -6882,14 +6864,6 @@
         ctx.moveTo(Math.round(gx), Math.round(gy));
         ctx.lineTo(Math.round(gx + sway), Math.round(gy - 5));
         ctx.stroke();
-      }
-      for (let i = 0; i < 3; i += 1) {
-        const cx = camX + ((time * (7 + i * 3) + i * 270) % (view.w + 420)) - 160;
-        const cy = camY + 130 + i * 120;
-        ctx.fillStyle = 'rgba(31, 66, 44, 0.1)';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, 120, 28, 0, 0, TAU);
-        ctx.fill();
       }
       for (let i = 0; i < 16; i += 1) {
         const h = stageHash(seed, i, 9, 51);
@@ -6987,6 +6961,19 @@
     }
   }
 
+  function stageGroundShadow(alpha) {
+    if (!game || game.mode !== 'stage' || !game.mapTheme) {
+      return 'rgba(0,0,0,' + alpha + ')';
+    }
+    if (game.mapTheme === 'desert') {
+      return 'rgba(77,49,23,' + (alpha * 0.72).toFixed(3) + ')';
+    }
+    if (game.mapTheme === 'snow') {
+      return 'rgba(44,68,89,' + (alpha * 0.55).toFixed(3) + ')';
+    }
+    return 'rgba(26,57,31,' + (alpha * 0.7).toFixed(3) + ')';
+  }
+
   function drawEnemy(enemy, now) {
     const spawnScale = enemy.spawnT > 0 ? 0.5 + (1 - enemy.spawnT / 0.6) * 0.5 : 1;
     const scale = clamp(spawnScale, 0.45, 1);
@@ -6995,7 +6982,7 @@
 
     ctx.save();
 
-    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillStyle = stageGroundShadow(0.42);
     ctx.beginPath();
     ctx.ellipse(enemy.x, enemy.y + enemy.r * 0.72, enemy.r * 0.92, enemy.r * 0.38, 0, 0, TAU);
     ctx.fill();
@@ -7325,7 +7312,7 @@
     const color = boss.enraged ? '#ff5a78' : '#ff8b72';
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.46)';
+    ctx.fillStyle = stageGroundShadow(0.46);
     ctx.beginPath();
     ctx.ellipse(boss.x, boss.y + boss.r * 0.76, boss.r * 0.95, boss.r * 0.35, 0, 0, TAU);
     ctx.fill();
@@ -7415,7 +7402,7 @@
     const y = companion.y + bob;
 
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.fillStyle = stageGroundShadow(0.38);
     ctx.beginPath();
     ctx.ellipse(companion.x, companion.y + 21, 23, 8, 0, 0, TAU);
     ctx.fill();
@@ -7472,7 +7459,7 @@
     ctx.save();
     ctx.globalAlpha = deathAlpha;
 
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillStyle = stageGroundShadow(0.45);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y + p.r * 0.78, p.r * 0.9, p.r * 0.36, 0, 0, TAU);
     ctx.fill();
@@ -8093,10 +8080,15 @@
     if (x < 0 || y < 0 || x > view.w || y > view.h) return;
     const active = input.mouse.down;
     const radius = active ? 14 : 11;
+    const snowMap = !!(game && game.mode === 'stage' && game.mapTheme === 'snow');
+    const crosshairColor = snowMap
+      ? (active ? '#ff2626' : '#ff3f3f')
+      : (active ? '#ffcf66' : 'rgba(93,225,255,0.86)');
+    const crosshairTick = snowMap ? 'rgba(255,48,48,0.82)' : 'rgba(93,225,255,0.7)';
 
     ctx.save();
-    ctx.strokeStyle = active ? '#ffcf66' : 'rgba(93,225,255,0.86)';
-    ctx.fillStyle = active ? '#ffcf66' : 'rgba(93,225,255,0.9)';
+    ctx.strokeStyle = crosshairColor;
+    ctx.fillStyle = snowMap ? (active ? '#ff2626' : 'rgba(255,63,63,0.95)') : (active ? '#ffcf66' : 'rgba(93,225,255,0.9)');
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, TAU);
@@ -8104,7 +8096,7 @@
     ctx.beginPath();
     ctx.arc(x, y, 2, 0, TAU);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(93,225,255,0.7)';
+    ctx.strokeStyle = crosshairTick;
     ctx.beginPath();
     ctx.moveTo(x - radius - 7, y);
     ctx.lineTo(x - radius + 2, y);
