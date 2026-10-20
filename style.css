@@ -1483,8 +1483,8 @@ body.touch[data-state="playing"] .touch-controls {
 .fire-button {
   right: 0;
   bottom: 0;
-  width: 86px;
-  height: 86px;
+  width: 92px;
+  height: 92px;
   border-color: rgba(255, 109, 124, 0.42);
   background:
     radial-gradient(circle at 36% 30%, rgba(255, 133, 143, 0.24), rgba(38, 13, 20, 0.8) 65%);
@@ -2087,8 +2087,8 @@ body.touch.is-portrait[data-state="paused"] .rotate-hint {
   }
 
   .fire-button {
-    width: 86px;
-    height: 86px;
+    width: 92px;
+    height: 92px;
   }
 
   .dash-button {
@@ -4236,13 +4236,31 @@ body.touch .skill-lock-note {
     bottom: max(10px, env(safe-area-inset-bottom));
     flex-direction: row;
     align-items: flex-end;
-    gap: 5px;
+    gap: 8px;
     transform: translateX(-50%);
   }
 
   body.touch .skill-slot {
-    width: 40px;
-    height: 40px;
+    width: 54px;
+    height: 54px;
+  }
+
+  body.touch .skill-timer {
+    font-size: 14px;
+  }
+
+  body.touch .move-joystick .joystick-base {
+    width: 108px;
+    height: 108px;
+  }
+
+  body.touch .move-joystick .joystick-knob {
+    width: 50px;
+    height: 50px;
+  }
+
+  body.touch .switch-button {
+    right: 94px;
   }
 
   body.touch .skill-name {

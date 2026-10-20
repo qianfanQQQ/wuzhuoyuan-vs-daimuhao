@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-15';
-  const BULLET_VERSION = '20261020-15';
+  const AVATAR_VERSION = '20261020-16';
+  const BULLET_VERSION = '20261020-16';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -8882,28 +8882,30 @@
     const form = getCurrentForm();
     const equippedSkin = getEquippedSkin();
 
-    const topW = Math.min(220, Math.max(190, view.w * 0.3));
-    const topX = view.w * 0.5 - topW * 0.5;
-    drawPanel(topX, 8, topW, 42, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
-    ctx.textBaseline = 'alphabetic';
-    ctx.textAlign = 'left';
-    setMonoFont(9, 800);
-    ctx.fillStyle = '#9ec4d6';
-    ctx.fillText('⏱ ' + formatTime(game.time), topX + 10, 23);
-    ctx.fillStyle = '#ffcf66';
-    ctx.fillText('☠ ' + formatNumber(game.kills), topX + 84, 23);
-    ctx.textAlign = 'left';
-    setFont(7.5, 600);
-    ctx.fillStyle = '#627f91';
-    ctx.fillText(weaponObjectiveText(), topX + 10, 38);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#a5bcca';
-    ctx.fillText(form ? (form.shortName || form.name) : 'EDG', topX + topW - 10, 38);
+    if (!game.bossActive) {
+      const topW = Math.min(220, Math.max(190, view.w * 0.3));
+      const topX = view.w * 0.5 - topW * 0.5;
+      drawPanel(topX, 8, topW, 42, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+      setMonoFont(9, 800);
+      ctx.fillStyle = '#9ec4d6';
+      ctx.fillText('⏱ ' + formatTime(game.time), topX + 10, 23);
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillText('☠ ' + formatNumber(game.kills), topX + 84, 23);
+      ctx.textAlign = 'left';
+      setFont(7.5, 600);
+      ctx.fillStyle = '#627f91';
+      ctx.fillText(weaponObjectiveText(), topX + 10, 38);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#a5bcca';
+      ctx.fillText(form ? (form.shortName || form.name) : 'EDG', topX + topW - 10, 38);
+    }
 
     const panelW = Math.min(220, Math.max(170, view.w * 0.27));
     const panelH = 66;
     const panelX = 12;
-    const panelY = view.h - 190;
+    const panelY = view.h - 196;
     drawPanel(panelX, panelY, panelW, panelH, 12, 'rgba(8,15,24,0.88)', 'rgba(255,123,111,0.24)');
     drawCircularAvatar(getEquippedAvatar(), panelX + 22, panelY + 33, 19, equippedSkin.ring, { ringWidth: 1.8 });
     ctx.save();
@@ -9072,6 +9074,31 @@
   function drawBossHUD() {
     if (!game || !game.boss || game.boss.dead) return;
     const boss = game.boss;
+    if (hasTouch && view.w > view.h) {
+      const w = Math.min(420, Math.max(220, view.w - 360));
+      const x = view.w * 0.5 - w * 0.5;
+      const y = 4;
+      const accent = boss.enraged ? (boss.themeRage || '#ff5a3c') : (boss.themeAccent || '#ff4f6d');
+      drawPanel(x - 8, y, w + 16, 48, 10, 'rgba(8,13,21,0.88)', accent);
+      ctx.textAlign = 'left';
+      setFont(9.5, 800);
+      ctx.fillStyle = '#ffe9e2';
+      ctx.fillText('☠ ' + boss.name + (boss.title ? ' · ' + boss.title : ''), x + 2, y + 14);
+      ctx.textAlign = 'right';
+      setMonoFont(7.5, 700);
+      ctx.fillStyle = boss.enraged ? accent : '#ff96a5';
+      ctx.fillText(boss.enraged ? 'ENRAGED' : 'PHASE ' + boss.phase, x + w - 2, y + 14);
+      const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
+      drawBar(x + 2, y + 20, w - 4, 7, ratio, accent, boss.themeBullet || '#ffcf66', 'rgba(255,255,255,0.08)');
+      ctx.textAlign = 'left';
+      setMonoFont(7, 700);
+      ctx.fillStyle = '#f4e7df';
+      ctx.fillText(formatNumber(Math.max(0, boss.hp)) + ' / ' + formatNumber(boss.maxHp), x + 2, y + 40);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#8499a6';
+      ctx.fillText('T' + (boss.tier || 1) + ' · ' + (boss.enraged ? '阶段 II' : '阶段 I'), x + w - 2, y + 40);
+      return;
+    }
     const compact = view.w < 1180;
     const w = compact ? view.w - 24 : Math.min(680, view.w - 480);
     const x = view.w * 0.5 - w * 0.5;
