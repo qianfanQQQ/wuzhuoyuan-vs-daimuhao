@@ -140,7 +140,7 @@
       name: '火箭筒',
       short: '火箭筒',
       damage: 58 * ROCKET_DAMAGE_MULTIPLIER,
-      fireInterval: 1.32,
+      fireInterval: 2.64,
       mag: 1,
       reloadTime: 2.55,
       bulletSpeed: 690,
@@ -824,8 +824,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-11';
-  const BULLET_VERSION = '20261020-11';
+  const AVATAR_VERSION = '20261020-12';
+  const BULLET_VERSION = '20261020-12';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -3567,7 +3567,10 @@
     const r = game.player.skills.r;
     if (!def || r.pendingShots <= 0) return null;
     const index = r.shotIndex;
-    const damage = def.damageSequence[index];
+    const baseDamage = def.damageSequence[index];
+    const stage = game.mode === 'stage' ? game.stage : 1;
+    const stageMultiplier = game.mode === 'stage' ? 1 + stage * 0.1 : 1;
+    const damage = baseDamage === undefined ? undefined : baseDamage * stageMultiplier;
     r.shotIndex += 1;
     r.pendingShots = Math.max(0, r.pendingShots - 1);
     return damage === undefined ? null : { damage: damage, index: index };
@@ -3576,7 +3579,8 @@
   function onEnemyKilled() {
     if (!game || !game.player || game.player.dead) return;
     if (!isEdgForm() || !isSkillActive('e')) return;
-    healPlayer(5, false);
+    const def = getFormSkill('e', 'edg');
+    healPlayer(def ? def.healPerKill : 1, false);
   }
 
   function updatePlayerMovement(dt) {

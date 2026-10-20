@@ -1371,7 +1371,8 @@ body.touch[data-state="playing"] .touch-controls {
 }
 
 .aim-joystick {
-  right: max(16px, env(safe-area-inset-right));
+  right: max(28px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
 }
 
 .joystick-base {
@@ -1482,8 +1483,8 @@ body.touch[data-state="playing"] .touch-controls {
 .fire-button {
   right: 0;
   bottom: 0;
-  width: 84px;
-  height: 84px;
+  width: 86px;
+  height: 86px;
   border-color: rgba(255, 109, 124, 0.42);
   background:
     radial-gradient(circle at 36% 30%, rgba(255, 133, 143, 0.24), rgba(38, 13, 20, 0.8) 65%);
@@ -1959,7 +1960,7 @@ body.touch.is-portrait[data-state="paused"] .rotate-hint {
   }
 
   .aim-joystick {
-    right: max(12px, env(safe-area-inset-right));
+    right: max(24px, env(safe-area-inset-right));
   }
 }
 
@@ -2086,8 +2087,8 @@ body.touch.is-portrait[data-state="paused"] .rotate-hint {
   }
 
   .fire-button {
-    width: 76px;
-    height: 76px;
+    width: 86px;
+    height: 86px;
   }
 
   .dash-button {

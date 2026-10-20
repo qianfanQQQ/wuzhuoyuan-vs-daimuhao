@@ -40,9 +40,9 @@
           effect: 'bloodlust',
           cooldown: 20,
           duration: 5,
-          healPerKill: 5,
+          healPerKill: 1,
           cooldownStartsOnCast: true,
-          desc: '5 秒内每次有效击杀恢复 5 点生命值，不超过最大生命值。'
+          desc: '5 秒内每次有效击杀恢复 1 点生命值，不超过最大生命值。'
         },
         r: {
           slot: 'R',
