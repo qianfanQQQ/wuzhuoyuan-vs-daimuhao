@@ -811,8 +811,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-6';
-  const BULLET_VERSION = '20261020-6';
+  const AVATAR_VERSION = '20261020-7';
+  const BULLET_VERSION = '20261020-7';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1130,7 +1130,12 @@
         baseKills: Math.max(0, Math.floor(Number(kills) || 0)),
         pendingShots: 0,
         shotIndex: 0,
-        castFlash: 0
+        castFlash: 0,
+        cooldown: 0,
+        phase: 'idle',
+        recordRemaining: 0,
+        windowRemaining: 0,
+        snapshot: null
       }
     };
   }
@@ -1140,13 +1145,24 @@
       !!window.CharacterForms && CharacterForms.hasSkills('edg');
   }
 
+  function isChampionForm() {
+    return !!game && game.player && game.player.formId === 'edg2026' &&
+      !!window.CharacterForms && CharacterForms.hasSkills('edg2026');
+  }
+
   function isSkillActive(slot) {
-    return isEdgForm() && game.player.skills &&
-      game.player.skills[slot] && game.player.skills[slot].active > 0;
+    return !!game && game.player && game.player.skills &&
+      game.player.skills[slot] && game.player.skills[slot].active > 0 &&
+      !!window.CharacterForms &&
+      CharacterForms.hasSkills(game.player.formId);
+  }
+
+  function isFreezeActive() {
+    return isChampionForm() && isSkillActive('q');
   }
 
   function hasInfiniteAmmo() {
-    return isSkillActive('q');
+    return isEdgForm() && isSkillActive('q');
   }
 
   function getRCharge() {
@@ -1399,6 +1415,7 @@
   let lastStatsPanelRefresh = -1;
   let skillSlots = [];
   let statsRows = {};
+  let statsLabels = {};
   let skinActionLock = false;
 
   const input = {
@@ -2665,6 +2682,7 @@
       companionBullets: [],
       companion: null,
       companionRecruitedThisRun: false,
+      skillProjectiles: [],
       eventBoss: null,
       eventBossActive: false,
       eventBossDefeated: false,
@@ -2918,25 +2936,49 @@
   /* =======================================================
      形态技能运行时
      ======================================================= */
+  function releaseDelayedPlayerBullets() {
+    if (!game) return;
+    for (let i = 0; i < game.bullets.length; i += 1) {
+      game.bullets[i].delayedByFreeze = false;
+    }
+  }
+
+  function clearChampionWorldState() {
+    if (!game) return;
+    game.skillProjectiles = [];
+    if (game.enemies) {
+      game.enemies.forEach(function (enemy) {
+        enemy.transferMark = null;
+      });
+    }
+    releaseDelayedPlayerBullets();
+  }
+
   function syncPlayerForm() {
     if (!game || !game.player) return;
     const nextFormId = getCurrentFormId();
     const p = game.player;
     if (p.formId === nextFormId) return;
+    clearChampionWorldState();
     p.formId = nextFormId;
     p.skills = createSkillState(nextFormId, game.kills);
-    // 切换形态时旧的 EDG 技能效果必须立即失效，射速回到新形态的当前实际值。
+    // 切换形态时旧的技能效果必须立即失效，射速回到新形态的当前实际值。
     p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
   }
 
   function resetPlayerSkillRuntime() {
     if (!game || !game.player || !game.player.skills) return;
+    clearChampionWorldState();
     const skills = game.player.skills;
     skills.q.active = 0;
     skills.e.active = 0;
     skills.r.pendingShots = 0;
     skills.r.shotIndex = 0;
     skills.r.castFlash = 0;
+    skills.r.phase = 'idle';
+    skills.r.recordRemaining = 0;
+    skills.r.windowRemaining = 0;
+    skills.r.snapshot = null;
   }
 
   function updatePlayerSkills(dt) {
@@ -2945,19 +2987,50 @@
     const p = game.player;
     const skills = p.skills;
     if (!skills) return;
+    const champion = isChampionForm();
 
     const q = skills.q;
     const qWasActive = q.active > 0;
     q.active = Math.max(0, q.active - dt);
     q.cooldown = Math.max(0, q.cooldown - dt);
     if (qWasActive && q.active <= 0) {
-      p.shootCd = Math.max(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+      if (champion) {
+        releaseDelayedPlayerBullets();
+        addToast('裁判拒绝申请，比赛继续！', 'warn', 1.7);
+        addRing(p.x, p.y, p.r + 10, '#ffcf66', 0.42, 2);
+      } else if (isEdgForm()) {
+        p.shootCd = Math.max(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+      }
     }
 
     const e = skills.e;
     e.active = Math.max(0, e.active - dt);
     e.cooldown = Math.max(0, e.cooldown - dt);
     skills.r.castFlash = Math.max(0, skills.r.castFlash - dt);
+
+    if (champion) {
+      const r = skills.r;
+      r.cooldown = Math.max(0, r.cooldown - dt);
+      if (r.phase === 'recording') {
+        r.recordRemaining = Math.max(0, r.recordRemaining - dt);
+        if (r.recordRemaining <= 0) {
+          r.phase = 'confirm';
+          r.windowRemaining = 2;
+          addToast('记录完成 · 2 秒内再次按 R 回溯', 'good', 2.1);
+          refreshSkillBar(true);
+          refreshStatsPanel(true);
+        }
+      } else if (r.phase === 'confirm') {
+        r.windowRemaining = Math.max(0, r.windowRemaining - dt);
+        if (r.windowRemaining <= 0) {
+          r.phase = 'idle';
+          r.snapshot = null;
+          addToast('回溯窗口结束', 'info', 1.2);
+          refreshSkillBar(true);
+          refreshStatsPanel(true);
+        }
+      }
+    }
   }
 
   function castSkill(slot) {
@@ -2970,6 +3043,10 @@
     const p = game.player;
     const skills = p.skills;
     if (!skills) return false;
+
+    if (form.id === 'edg2026') {
+      return castChampionSkill(slot, form, def);
+    }
 
     if (slot === 'q') {
       if (skills.q.active > 0 || skills.q.cooldown > 0) return false;
@@ -3057,6 +3134,342 @@
       refreshSkillBar(true);
       refreshStatsPanel(true);
       return true;
+    }
+
+    return false;
+  }
+
+  function findSafeSkillPosition(originX, originY, radius, ignoreEnemy, avoidPlayer) {
+    if (!game) return null;
+    const p = game.player;
+    const margin = radius + 14;
+    const baseX = clamp(originX, margin, MAP.w - margin);
+    const baseY = clamp(originY, margin, MAP.h - margin);
+    const rings = [0, 28, 56, 90, 130, 180, 240];
+    const steps = 16;
+
+    function isFree(x, y) {
+      if (x < margin || x > MAP.w - margin || y < margin || y > MAP.h - margin) return false;
+      if (avoidPlayer && p && !p.dead && Math.hypot(x - p.x, y - p.y) < p.r + radius + 18) return false;
+      for (let i = 0; i < game.enemies.length; i += 1) {
+        const enemy = game.enemies[i];
+        if (enemy.dead || enemy === ignoreEnemy) continue;
+        if (Math.hypot(x - enemy.x, y - enemy.y) < enemy.r + radius + 10) return false;
+      }
+      if (game.boss && !game.boss.dead &&
+          Math.hypot(x - game.boss.x, y - game.boss.y) < game.boss.r + radius + 16) {
+        return false;
+      }
+      if (game.eventBossActive && game.eventBoss && !game.eventBoss.dead &&
+          Math.hypot(x - game.eventBoss.x, y - game.eventBoss.y) < game.eventBoss.r + radius + 16) {
+        return false;
+      }
+      return true;
+    }
+
+    for (let ringIndex = 0; ringIndex < rings.length; ringIndex += 1) {
+      const ring = rings[ringIndex];
+      for (let step = 0; step < steps; step += 1) {
+        const angle = (step / steps) * TAU;
+        const x = clamp(baseX + Math.cos(angle) * ring, margin, MAP.w - margin);
+        const y = clamp(baseY + Math.sin(angle) * ring, margin, MAP.h - margin);
+        if (isFree(x, y)) return { x: x, y: y };
+      }
+    }
+    return null;
+  }
+
+  function spawnContractProjectile(def) {
+    if (!game) return null;
+    const p = game.player;
+    const angle = p.aimAngle;
+    const x = p.x + Math.cos(angle) * (p.r + 18);
+    const y = p.y + Math.sin(angle) * (p.r + 18);
+    const projectile = {
+      kind: 'contract',
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * def.contractSpeed,
+      vy: Math.sin(angle) * def.contractSpeed,
+      radius: def.contractRadius,
+      life: def.contractLife,
+      maxLife: def.contractLife,
+      angle: angle,
+      spin: rand(0, TAU),
+      dead: false,
+      trail: [{ x: x, y: y }]
+    };
+    game.skillProjectiles.push(projectile);
+    return projectile;
+  }
+
+  function updateSkillProjectiles(dt) {
+    if (!game || !game.skillProjectiles || game.skillProjectiles.length === 0) return;
+    const p = game.player;
+    const def = getFormSkill('e', 'edg2026');
+    if (!def) return;
+
+    for (let i = 0; i < game.skillProjectiles.length; i += 1) {
+      const projectile = game.skillProjectiles[i];
+      if (projectile.dead) continue;
+      projectile.life -= dt;
+      const oldX = projectile.x;
+      const oldY = projectile.y;
+      const nextX = projectile.x + projectile.vx * dt;
+      const nextY = projectile.y + projectile.vy * dt;
+      projectile.trail.push({ x: nextX, y: nextY });
+      if (projectile.trail.length > 10) projectile.trail.shift();
+
+      if (projectile.life <= 0 || nextX < 0 || nextX > MAP.w || nextY < 0 || nextY > MAP.h) {
+        projectile.dead = true;
+        continue;
+      }
+
+      let hit = null;
+      for (let j = 0; j < game.enemies.length; j += 1) {
+        const enemy = game.enemies[j];
+        if (enemy.dead || enemy.type !== 'normal' || enemy.transferMark) continue;
+        if (segmentCircleHit(oldX, oldY, nextX, nextY, enemy.x, enemy.y, enemy.r + projectile.radius)) {
+          hit = enemy;
+          break;
+        }
+      }
+
+      if (hit) {
+        const aimX = p.x + Math.cos(p.aimAngle) * def.teleportAimDistance;
+        const aimY = p.y + Math.sin(p.aimAngle) * def.teleportAimDistance;
+        const safe = findSafeSkillPosition(aimX, aimY, hit.r, hit, true);
+        projectile.dead = true;
+        if (!safe) {
+          addToast('转会窗口被占满，合同失效', 'warn', 1.5);
+          continue;
+        }
+
+        hit.x = safe.x;
+        hit.y = safe.y;
+        hit.pushX = 0;
+        hit.pushY = 0;
+        hit.attackCd = Math.max(hit.attackCd, 0.9);
+        if (hit.shootCd) hit.shootCd = Math.max(hit.shootCd, 0.9);
+        hit.transferMark = {
+          time: def.markDuration,
+          explodeIn: def.explosionDelay,
+          exploded: false,
+          damage: def.explosionDamage,
+          radius: def.explosionRadius
+        };
+        game.player.skills.e.active = Math.max(game.player.skills.e.active, def.markDuration);
+        addRing(hit.x, hit.y, hit.r + 14, '#ffcf66', 0.5, 3);
+        addToast('恭喜你，已成功签约 EDG！', 'good', 1.8);
+        audio.play('skill');
+        refreshSkillBar(true);
+        refreshStatsPanel(true);
+      } else {
+        projectile.x = nextX;
+        projectile.y = nextY;
+      }
+    }
+
+    game.skillProjectiles = game.skillProjectiles.filter(function (projectile) {
+      return !projectile.dead;
+    });
+  }
+
+  function explodeTransfer(sourceEnemy, mark) {
+    if (!game || !sourceEnemy || sourceEnemy.dead || !mark || mark.exploded) return;
+    mark.exploded = true;
+    const x = sourceEnemy.x;
+    const y = sourceEnemy.y;
+    const beforeKills = game.kills;
+
+    addRing(x, y, mark.radius, '#ff5a48', 0.55, 4);
+    addRing(x, y, mark.radius * 0.55, '#ffcf66', 0.4, 2);
+    addShake(7);
+    audio.play('explosion');
+    for (let i = 0; i < 28; i += 1) {
+      const angle = rand(0, TAU);
+      const speed = rand(40, 260);
+      spawnParticle(
+        x,
+        y,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        rand(0.2, 0.65),
+        rand(2, 7),
+        Math.random() < 0.5 ? '#ff5a48' : '#ffcf66',
+        true
+      );
+    }
+
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead || enemy === sourceEnemy) continue;
+      const distance = Math.hypot(enemy.x - x, enemy.y - y);
+      if (distance > mark.radius + enemy.r) continue;
+      damageEnemy(enemy, mark.damage, {
+        critical: false,
+        pushX: ((enemy.x - x) / Math.max(1, distance)) * 90,
+        pushY: ((enemy.y - y) / Math.max(1, distance)) * 90
+      });
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.dead) {
+      const bossDistance = Math.hypot(game.eventBoss.x - x, game.eventBoss.y - y);
+      if (bossDistance <= mark.radius + game.eventBoss.r) {
+        damageEventBoss(mark.damage, { critical: false });
+      }
+    }
+
+    addToast('合同到期，双方友好解约。', 'good', 1.8);
+    if (game.kills - beforeKills >= 10) {
+      addToast('这波转会，血赚！', 'good', 2.4);
+    }
+    refreshStatsPanel(true);
+  }
+
+  function updateTransferMarks(dt) {
+    if (!game) return;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      const mark = enemy.transferMark;
+      if (!mark) continue;
+      if (enemy.dead) {
+        enemy.transferMark = null;
+        continue;
+      }
+      mark.time = Math.max(0, mark.time - dt);
+      if (!mark.exploded) {
+        mark.explodeIn -= dt;
+        if (mark.explodeIn <= 0) explodeTransfer(enemy, mark);
+      }
+      if (mark.time <= 0) enemy.transferMark = null;
+    }
+  }
+
+  function startChampionRecord(def) {
+    const p = game.player;
+    const r = p.skills.r;
+    if (r.cooldown > 0 || r.phase !== 'idle') return false;
+    r.cooldown = def.cooldown;
+    r.phase = 'recording';
+    r.recordRemaining = def.recordDuration;
+    r.windowRemaining = 0;
+    r.snapshot = {
+      x: p.x,
+      y: p.y,
+      hp: p.hp,
+      maxHp: p.maxHp,
+      kills: game.kills,
+      time: game.time
+    };
+    addToast('我们认为，刚才那场比赛存在重新开始的必要。', 'warn', 2.2);
+    addRing(p.x, p.y, p.r + 12, '#ffcf66', 0.6, 3);
+    audio.play('skill');
+    pulseSkillSlot('r');
+    refreshSkillBar(true);
+    refreshStatsPanel(true);
+    return true;
+  }
+
+  function executeChampionRewind() {
+    if (!game || state !== S.PLAYING || !game.player || game.player.dead) return false;
+    const p = game.player;
+    const r = p.skills.r;
+    if (r.phase !== 'confirm' || !r.snapshot) return false;
+    const snapshot = r.snapshot;
+    const safe = findSafeSkillPosition(snapshot.x, snapshot.y, p.r, null, false);
+    if (!safe) {
+      addToast('回溯位置被占据，复核失败', 'warn', 1.6);
+      r.phase = 'idle';
+      r.snapshot = null;
+      refreshSkillBar(true);
+      return false;
+    }
+
+    p.x = safe.x;
+    p.y = safe.y;
+    p.hp = Math.min(snapshot.hp, p.maxHp);
+    p.dashTime = 0;
+    p.invuln = Math.max(p.invuln, 0.35);
+    const killsDuringRecord = game.kills - snapshot.kills;
+    r.phase = 'idle';
+    r.windowRemaining = 0;
+    r.snapshot = null;
+
+    addRing(p.x, p.y, p.r + 16, '#ffcf66', 0.7, 4);
+    for (let i = 0; i < 24; i += 1) {
+      const angle = rand(0, TAU);
+      spawnParticle(
+        p.x + Math.cos(angle) * rand(10, 40),
+        p.y + Math.sin(angle) * rand(10, 40),
+        Math.cos(angle) * rand(40, 180),
+        Math.sin(angle) * rand(40, 180),
+        rand(0.2, 0.55),
+        rand(2, 6),
+        Math.random() < 0.5 ? '#ffcf66' : '#ff5a6d',
+        true
+      );
+    }
+    addToast('比赛结果已提交复核。', 'good', 2.2);
+    if (killsDuringRecord >= 10) {
+      addToast('虽然止步十六强，但这波操作可以进集锦。', 'good', 2.8);
+    }
+    audio.play('skill');
+    pulseSkillSlot('r');
+    refreshSkillBar(true);
+    refreshStatsPanel(true);
+    return true;
+  }
+
+  function castChampionSkill(slot, form, def) {
+    if (!game || state !== S.PLAYING || !game.player || game.player.dead) return false;
+    const p = game.player;
+    const skills = p.skills;
+
+    if (slot === 'q') {
+      if (skills.q.active > 0 || skills.q.cooldown > 0) return false;
+      skills.q.active = def.freezeDuration || def.duration;
+      skills.q.cooldown = def.cooldown;
+      addToast('暂停！我们要求重新检查比赛录像！', 'warn', 2.0);
+      addRing(p.x, p.y, p.r + 14, '#ffcf66', 0.55, 3);
+      for (let i = 0; i < 18; i += 1) {
+        const angle = rand(0, TAU);
+        spawnParticle(
+          p.x + Math.cos(angle) * 18,
+          p.y + Math.sin(angle) * 18,
+          Math.cos(angle) * rand(50, 190),
+          Math.sin(angle) * rand(50, 190),
+          rand(0.18, 0.45),
+          rand(2, 5),
+          Math.random() < 0.5 ? '#ffcf66' : '#ff6b5f',
+          true
+        );
+      }
+      audio.play('skill');
+      pulseSkillSlot('q');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'e') {
+      if (skills.e.cooldown > 0) return false;
+      skills.e.cooldown = def.cooldown;
+      skills.e.active = 0;
+      spawnContractProjectile(def);
+      addToast('紧急转会 · 合同已发出', 'info', 1.4);
+      addRing(p.x, p.y, p.r + 8, '#ffcf66', 0.35, 2);
+      audio.play('skill');
+      pulseSkillSlot('e');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'r') {
+      if (skills.r.phase === 'confirm') return executeChampionRewind();
+      if (skills.r.phase === 'recording') return false;
+      if (skills.r.cooldown > 0) return false;
+      return startChampionRecord(def);
     }
 
     return false;
@@ -3269,7 +3682,7 @@
   function getWeaponStats(key) {
     const p = game.player;
     const def = WEAPONS[key];
-    const rapidFire = isSkillActive('q') ? 2 : 1;
+    const rapidFire = isEdgForm() && isSkillActive('q') ? 2 : 1;
     return {
       damage: def.damage * p.damageMult,
       fireInterval: Math.max(0.04, def.fireInterval / (p.fireRateMult * rapidFire)),
@@ -3400,6 +3813,7 @@
       splashDamage: (def.splashDamage || 0) * game.player.damageMult,
       splashRadius: def.splashRadius || 0,
       dead: false,
+      delayedByFreeze: isFreezeActive(),
       smokeTimer: 0,
       trail: [{ x: x, y: y }]
     };
@@ -5321,6 +5735,7 @@
     for (let i = 0; i < game.bullets.length; i += 1) {
       const bullet = game.bullets[i];
       if (bullet.dead) continue;
+      if (bullet.delayedByFreeze && isFreezeActive()) continue;
 
       bullet.life -= dt;
       const oldX = bullet.x;
@@ -5685,15 +6100,19 @@
     updatePlayerCombat(dt);
     if (state !== S.PLAYING) return;
 
+    const frozen = isFreezeActive();
     updateCompanion(dt);
-    updateEventBoss(dt);
-    if (state !== S.PLAYING) return;
-
-    updateSpawning(dt);
-    updateEnemies(dt);
+    if (!frozen) {
+      updateEventBoss(dt);
+      if (state !== S.PLAYING) return;
+      updateSpawning(dt);
+      updateEnemies(dt);
+    }
+    if (state === S.PLAYING) updateSkillProjectiles(dt);
     if (state === S.PLAYING) updatePlayerBullets(dt);
-    if (state === S.PLAYING) updateEnemyBullets(dt);
+    if (state === S.PLAYING && !frozen) updateEnemyBullets(dt);
     if (state === S.PLAYING) updateCompanionBullets(dt);
+    if (!frozen) updateTransferMarks(dt);
     if (state !== S.PLAYING) return;
     if (state === S.PLAYING) updateOrbs(dt);
     updateEffects(dt);
@@ -6010,8 +6429,10 @@
     drawOrbs();
     drawRings();
     drawEventBossTelegraphs();
+    drawRewindEcho();
     drawCharacters(now);
     drawBullets();
+    drawSkillProjectiles();
     drawCompanionBullets();
     drawParticles();
     drawDamageNumbers();
@@ -6291,6 +6712,40 @@
       }
     );
 
+    if (isFreezeActive()) {
+      ctx.save();
+      ctx.globalAlpha = 0.44;
+      ctx.fillStyle = 'rgba(120, 225, 255, 0.16)';
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, radius + 6, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#a8edff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, radius + 7, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (enemy.transferMark) {
+      const mark = enemy.transferMark;
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
+      ctx.rotate(time * 1.6);
+      ctx.strokeStyle = mark.exploded ? '#ffcf66' : '#ff6b5f';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 10, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      ctx.textAlign = 'center';
+      setMonoFont(7, 800);
+      ctx.fillStyle = mark.exploded ? '#ffcf66' : '#ff9b83';
+      ctx.fillText(mark.exploded ? '已解约' : '转会 ' + mark.time.toFixed(1) + 's', enemy.x, enemy.y - radius - 23);
+    }
+
     if (enemy.hitFlash > 0) {
       ctx.save();
       ctx.globalAlpha = clamp(enemy.hitFlash * 4, 0, 0.55);
@@ -6533,6 +6988,21 @@
       ringWidth: 4,
       dashed: boss.enraged
     });
+
+    if (isFreezeActive()) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = 'rgba(120, 225, 255, 0.13)';
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, radius + 8, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#a8edff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, radius + 9, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     if (boss.hitFlash > 0) {
       ctx.save();
@@ -6799,6 +7269,23 @@
       const bullet = game.bullets[i];
       if (!isWorldVisible(bullet.x, bullet.y, 80)) continue;
 
+      if (bullet.delayedByFreeze && isFreezeActive()) {
+        drawBulletTrail(bullet, '#ffcf66', bullet.radius);
+        ctx.save();
+        ctx.globalAlpha = 0.75 + Math.sin(performance.now() * 0.014) * 0.18;
+        ctx.strokeStyle = '#ffe3a3';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius + 8, 0, TAU);
+        ctx.stroke();
+        ctx.fillStyle = '#fff0c4';
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, Math.max(1.5, bullet.radius * 0.7), 0, TAU);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
       if (bullet.kind === 'scythe') {
         drawScytheBullet(bullet);
         continue;
@@ -6836,6 +7323,16 @@
       const bullet = game.enemyBullets[i];
       if (!isWorldVisible(bullet.x, bullet.y, 80)) continue;
       drawBulletTrail(bullet, bullet.color, bullet.radius);
+      if (isFreezeActive()) {
+        ctx.save();
+        ctx.globalAlpha = 0.46;
+        ctx.strokeStyle = '#a8edff';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius + 7, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
       const pulse = 1 + Math.sin(performance.now() * 0.02 + i) * 0.14;
       if (bullet.eventBoss) {
         ctx.globalAlpha = 0.16;
@@ -6948,6 +7445,92 @@
     ctx.restore();
   }
 
+  function drawSkillProjectiles() {
+    if (!game || !game.skillProjectiles) return;
+    const time = performance.now() * 0.001;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < game.skillProjectiles.length; i += 1) {
+      const projectile = game.skillProjectiles[i];
+      if (!isWorldVisible(projectile.x, projectile.y, 80)) continue;
+      if (projectile.trail && projectile.trail.length > 1) {
+        ctx.lineCap = 'round';
+        for (let j = 1; j < projectile.trail.length; j += 1) {
+          const a = projectile.trail[j - 1];
+          const b = projectile.trail[j];
+          ctx.globalAlpha = (j / projectile.trail.length) * 0.3;
+          ctx.strokeStyle = '#ffcf66';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+      const glow = ctx.createRadialGradient(projectile.x, projectile.y, 2, projectile.x, projectile.y, 28);
+      glow.addColorStop(0, 'rgba(255, 245, 180, 0.9)');
+      glow.addColorStop(0.35, 'rgba(255, 191, 80, 0.42)');
+      glow.addColorStop(1, 'rgba(255, 91, 91, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(projectile.x, projectile.y, 28, 0, TAU);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(projectile.x, projectile.y);
+      ctx.rotate(projectile.angle + Math.sin(time * 8 + projectile.spin) * 0.1);
+      ctx.fillStyle = '#f7e6bf';
+      ctx.strokeStyle = '#ffcf66';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(-8, -6);
+      ctx.lineTo(8, -6);
+      ctx.lineTo(11, 6);
+      ctx.lineTo(-11, 6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#8d3d25';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-5, -2);
+      ctx.lineTo(5, -2);
+      ctx.moveTo(-5, 2);
+      ctx.lineTo(6, 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawRewindEcho() {
+    if (!game || !isChampionForm()) return;
+    const r = game.player.skills ? game.player.skills.r : null;
+    if (!r || !r.snapshot || (r.phase !== 'recording' && r.phase !== 'confirm')) return;
+    const p = game.player;
+    const pulse = 0.22 + Math.sin(performance.now() * 0.008) * 0.08;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = r.phase === 'confirm' ? '#ffcf66' : '#ff5a6d';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r.snapshot.x, r.snapshot.y, p.r + 18, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha = pulse * 0.6;
+    ctx.beginPath();
+    ctx.arc(
+      r.snapshot.x + (p.x - r.snapshot.x) * 0.5,
+      r.snapshot.y + (p.y - r.snapshot.y) * 0.5,
+      p.r + 8,
+      0,
+      TAU
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawBulletTrail(bullet, color, radius) {
     if (!bullet.trail || bullet.trail.length < 1) return;
     ctx.lineCap = 'round';
@@ -7034,6 +7617,43 @@
       damageGlow.addColorStop(0.7, 'rgba(255,20,50,' + (intensity * 0.15).toFixed(3) + ')');
       damageGlow.addColorStop(1, 'rgba(255,24,53,' + (intensity * 0.72).toFixed(3) + ')');
       ctx.fillStyle = damageGlow;
+      ctx.fillRect(0, 0, view.w, view.h);
+    }
+
+    if (isFreezeActive()) {
+      const freeze = ctx.createRadialGradient(
+        view.w * 0.5, view.h * 0.5, Math.min(view.w, view.h) * 0.3,
+        view.w * 0.5, view.h * 0.5, Math.max(view.w, view.h) * 0.72
+      );
+      freeze.addColorStop(0, 'rgba(130,220,255,0)');
+      freeze.addColorStop(0.78, 'rgba(120,215,255,0.055)');
+      freeze.addColorStop(1, 'rgba(255,207,102,0.16)');
+      ctx.fillStyle = freeze;
+      ctx.fillRect(0, 0, view.w, view.h);
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = '#a8edff';
+      ctx.lineWidth = 1;
+      for (let y = 0; y < view.h; y += 46) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(view.w, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    if (isChampionForm() && game.player.skills &&
+        (game.player.skills.r.phase === 'recording' || game.player.skills.r.phase === 'confirm')) {
+      const r = game.player.skills.r;
+      const pulse = 0.08 + Math.sin(performance.now() * 0.011) * 0.03;
+      const rewind = ctx.createRadialGradient(
+        view.w * 0.5, view.h * 0.5, Math.min(view.w, view.h) * 0.3,
+        view.w * 0.5, view.h * 0.5, Math.max(view.w, view.h) * 0.76
+      );
+      rewind.addColorStop(0, 'rgba(255,207,102,0)');
+      rewind.addColorStop(1, r.phase === 'confirm' ? 'rgba(255,207,102,' + (pulse * 2.4) + ')' : 'rgba(255,71,91,' + (pulse * 1.5) + ')');
+      ctx.fillStyle = rewind;
       ctx.fillRect(0, 0, view.w, view.h);
     }
 
@@ -7196,7 +7816,7 @@
     ctx.textBaseline = 'alphabetic';
     setFont(12, 850);
     ctx.fillStyle = '#ffe9df';
-    ctx.fillText(form ? form.name : 'EDG', x + 84, y + 19);
+    ctx.fillText(form ? (form.shortName || form.name) : 'EDG', x + 84, y + 19);
     setMonoFont(8, 700);
     ctx.fillStyle = '#b7837c';
     ctx.fillText((form && form.title ? form.title : '角色形态') + ' · ' + MODE_LABEL[game.mode], x + 84, y + 32);
@@ -7413,7 +8033,7 @@
     ctx.textBaseline = 'alphabetic';
     setFont(9.5, 700);
     ctx.fillStyle = '#8aa4b6';
-    ctx.fillText('Lv.' + game.level + ' · ' + (compactForm ? compactForm.name : 'EDG'), barX, y + 16);
+    ctx.fillText('Lv.' + game.level + ' · ' + (compactForm ? (compactForm.shortName || compactForm.name) : 'EDG'), barX, y + 16);
 
     drawBar(barX, y + 23, barW, 12, p.hp / p.maxHp, '#ff536f', '#ffad54', 'rgba(255,255,255,0.08)');
     setMonoFont(8, 800);
@@ -7762,6 +8382,8 @@
       return;
     }
 
+    const champion = form.id === 'edg2026';
+
     skillSlots.forEach(function (button) {
       const slot = button.getAttribute('data-skill');
       const def = form.skills[slot];
@@ -7769,6 +8391,14 @@
       if (!def || !stateForSlot) return;
       const mask = button.querySelector('.skill-cd-mask');
       const timer = button.querySelector('.skill-timer');
+      const nameNode = button.querySelector('.skill-name');
+      const icon = button.querySelector('.skill-icon');
+      if (nameNode) nameNode.textContent = def.name;
+      if (icon) {
+        const expected = def.icon + '?v=' + AVATAR_VERSION;
+        if (icon.getAttribute('src') !== expected) icon.setAttribute('src', expected);
+      }
+      button.setAttribute('aria-label', def.slot + ' ' + def.name);
       button.classList.remove('is-active', 'is-r-ready', 'is-r-charging');
 
       if (slot === 'q' || slot === 'e') {
@@ -7787,6 +8417,32 @@
           timer.textContent = '';
         }
         button.title = def.name + (active > 0 ? ' · 持续 ' + active.toFixed(1) + 's' : cooldown > 0 ? ' · 冷却 ' + Math.ceil(cooldown) + 's' : ' · 就绪');
+        return;
+      }
+
+      if (champion) {
+        const r = stateForSlot;
+        if (r.phase === 'recording') {
+          button.classList.add('is-active');
+          mask.style.height = '0%';
+          timer.textContent = r.recordRemaining.toFixed(1) + 's';
+          button.title = '十六强重开 · 记录中 ' + r.recordRemaining.toFixed(1) + 's';
+        } else if (r.phase === 'confirm') {
+          button.classList.add('is-r-ready');
+          mask.style.height = '0%';
+          timer.textContent = r.windowRemaining.toFixed(1) + 's';
+          button.title = '十六强重开 · 再按 R 回溯，确认窗口 ' + r.windowRemaining.toFixed(1) + 's';
+        } else if (r.cooldown > 0) {
+          button.classList.add('is-r-charging');
+          mask.style.height = (clamp(r.cooldown / def.cooldown, 0, 1) * 100).toFixed(1) + '%';
+          timer.textContent = String(Math.ceil(r.cooldown));
+          button.title = '十六强重开 · 冷却 ' + Math.ceil(r.cooldown) + 's';
+        } else {
+          button.classList.add('is-r-ready');
+          mask.style.height = '0%';
+          timer.textContent = '';
+          button.title = '十六强重开 · 就绪';
+        }
         return;
       }
 
@@ -7815,8 +8471,12 @@
   function setupStatsPanel() {
     if (!el.statsPanel) return;
     statsRows = {};
+    statsLabels = {};
     el.statsPanel.querySelectorAll('[data-stat]').forEach(function (node) {
       statsRows[node.getAttribute('data-stat')] = node;
+    });
+    el.statsPanel.querySelectorAll('[data-stat-label]').forEach(function (node) {
+      statsLabels[node.getAttribute('data-stat-label')] = node;
     });
     if (el.statsCloseBtn) el.statsCloseBtn.addEventListener('click', closeStatsPanel);
   }
@@ -7833,11 +8493,34 @@
     const e = p.skills ? p.skills.e : { active: 0, cooldown: 0 };
     const r = p.skills ? p.skills.r : { pendingShots: 0 };
     const hasFormSkills = !!(form && form.implemented && form.skills);
+    const champion = !!(form && form.id === 'edg2026');
     const qState = !hasFormSkills ? '未开放' : q.active > 0 ? '激活 ' + q.active.toFixed(1) + 's' : q.cooldown > 0 ? '冷却 ' + Math.ceil(q.cooldown) + 's' : '就绪';
-    const eState = !hasFormSkills ? '未开放' : e.active > 0 ? '激活 ' + e.active.toFixed(1) + 's' : e.cooldown > 0 ? '冷却 ' + Math.ceil(e.cooldown) + 's' : '就绪';
+    const eState = !hasFormSkills ? '未开放' : e.active > 0 ? (champion ? '标记 ' + e.active.toFixed(1) + 's' : '激活 ' + e.active.toFixed(1) + 's') : e.cooldown > 0 ? '冷却 ' + Math.ceil(e.cooldown) + 's' : '就绪';
     const charge = getRCharge();
     const required = (getFormSkill('r', 'edg') || {}).requiredKills || 30;
-    const activeDuration = hasFormSkills ? Math.max(q.active || 0, e.active || 0) : 0;
+    let rCharge = '—';
+    let rShots = '—';
+    if (hasFormSkills && champion) {
+      if (r.phase === 'recording') {
+        rCharge = '记录 ' + r.recordRemaining.toFixed(1) + 's';
+        rShots = '—';
+      } else if (r.phase === 'confirm') {
+        rCharge = '确认 ' + r.windowRemaining.toFixed(1) + 's';
+        rShots = '可按 R 回溯';
+      } else if (r.cooldown > 0) {
+        rCharge = '冷却 ' + Math.ceil(r.cooldown) + 's';
+        rShots = '—';
+      } else {
+        rCharge = '就绪';
+        rShots = '—';
+      }
+    } else if (hasFormSkills) {
+      rCharge = charge + ' / ' + required;
+      rShots = (r.pendingShots || 0) + ' / 5';
+    }
+    const activeDuration = hasFormSkills
+      ? Math.max(q.active || 0, e.active || 0, champion && r.phase === 'recording' ? r.recordRemaining : 0)
+      : 0;
     return {
       hp: Math.ceil(p.hp) + ' / ' + Math.ceil(p.maxHp),
       level: String(game.level),
@@ -7865,8 +8548,8 @@
       critDamageBonus: '+' + Math.round((p.critMultiplier - 2) * 100) + '%',
       qState: qState,
       eState: eState,
-      rCharge: hasFormSkills ? charge + ' / ' + required : '—',
-      rShots: hasFormSkills ? (r.pendingShots || 0) + ' / 5' : '—',
+      rCharge: rCharge,
+      rShots: rShots,
       skillDuration: hasFormSkills ? activeDuration.toFixed(1) + 's' : '—'
     };
   }
@@ -7881,6 +8564,12 @@
       if (statsRows[key]) statsRows[key].textContent = data[key];
     });
     const form = getCurrentForm();
+    const champion = !!(form && form.id === 'edg2026');
+    const hasSkills = !!(form && form.implemented && form.skills);
+    if (statsLabels.qState) statsLabels.qState.textContent = champion ? 'Q · 暂停一下，裁判！' : hasSkills ? 'Q · 极速射击' : 'Q · 形态技能';
+    if (statsLabels.eState) statsLabels.eState.textContent = champion ? 'E · 紧急转会！' : hasSkills ? 'E · 嗜血杀戮' : 'E · 形态技能';
+    if (statsLabels.rCharge) statsLabels.rCharge.textContent = champion ? 'R · 当前阶段' : hasSkills ? 'R · 击杀充能' : 'R · 形态技能';
+    if (statsLabels.rShots) statsLabels.rShots.textContent = champion ? 'R · 回溯窗口' : hasSkills ? 'R · 镰刀弹' : 'R · 状态';
     if (el.statsFormName) el.statsFormName.textContent = form ? form.name : '—';
     if (el.statsFormTitle) el.statsFormTitle.textContent = form ? form.title : '';
   }

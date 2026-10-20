@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="十六强重开！">
+  <defs>
+    <radialGradient id="r26-bg" cx="46%" cy="38%" r="80%">
+      <stop offset="0" stop-color="#3d1018"/>
+      <stop offset="0.6" stop-color="#15070b"/>
+      <stop offset="1" stop-color="#07060a"/>
+    </radialGradient>
+    <linearGradient id="r26-gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0b0"/>
+      <stop offset="0.5" stop-color="#ffcf66"/>
+      <stop offset="1" stop-color="#a96d20"/>
+    </linearGradient>
+    <linearGradient id="r26-red" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffb099"/>
+      <stop offset="0.55" stop-color="#ff4058"/>
+      <stop offset="1" stop-color="#8c0e28"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="url(#r26-bg)" stroke="#7d2b33"/>
+  <path d="M12 34c3-13 13-21 25-21 6 0 11 2 15 5" fill="none" stroke="#ffcf66" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+  <path d="M52 18l-2 8-8-2" fill="none" stroke="#ffcf66" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 17h17v8c0 9-4 14-8.5 18-4.5-4-8.5-9-8.5-18z" fill="url(#r26-gold)" stroke="#fff0c4" stroke-width="1.1"/>
+  <path d="M20 20h5c0 7 1 11 3.5 14M37 20h-5c0 7-1 11-3.5 14" fill="none" stroke="#7a4b18" stroke-width="1.2" opacity="0.8"/>
+  <path d="M28.5 33v11M24 44h9M26 50h5" stroke="#ffcf66" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M31 38l7-6-1 8 5 2-8 3" fill="url(#r26-red)" stroke="#ffb09a" stroke-width="1"/>
+  <path d="M49 39l5 4-3 6-7-1-4 5-6-4" fill="none" stroke="#ff5d6f" stroke-width="1.7" stroke-linecap="round" opacity="0.85"/>
+  <path d="M12 46l4-4M10 53l5-2" stroke="#ffcf66" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="53" cy="22" r="1.8" fill="#ffcf66"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="13.5" fill="none" stroke="#ffcf66" stroke-opacity="0.3"/>
+</svg>
