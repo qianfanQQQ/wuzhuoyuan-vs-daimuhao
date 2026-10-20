@@ -10,6 +10,17 @@
      ======================================================= */
   const TAU = Math.PI * 2;
   const MAP = { w: 3200, h: 3200 };
+  const STAGE_MAP_THEMES = ['desert', 'snow', 'grass'];
+  const STAGE_MAP_ACCENTS = {
+    desert: '#e2b15f',
+    snow: '#bfe9ff',
+    grass: '#b8e986'
+  };
+  const STAGE_MAP_BORDERS = {
+    desert: { soft: 'rgba(226,177,95,0.2)', strong: 'rgba(226,177,95,0.62)' },
+    snow: { soft: 'rgba(191,233,255,0.22)', strong: 'rgba(191,233,255,0.7)' },
+    grass: { soft: 'rgba(184,233,134,0.2)', strong: 'rgba(184,233,134,0.62)' }
+  };
   const SAVE_KEY = 'brother_stop_chasing_me_save_v1';
   const MAX_ENEMIES = 105;
   const MAX_BULLETS = 380;
@@ -813,8 +824,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-8';
-  const BULLET_VERSION = '20261020-8';
+  const AVATAR_VERSION = '20261020-9';
+  const BULLET_VERSION = '20261020-9';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -2678,6 +2689,8 @@
   function createGame(mode) {
     const g = {
       mode: mode === 'stage' ? 'stage' : 'survival',
+      mapTheme: null,
+      mapSeed: 1,
       time: 0,
       lastSecond: 0,
       score: 0,
@@ -2771,6 +2784,10 @@
     audio.ensure();
     clearInput();
     game = createGame(mode);
+    if (game.mode === 'stage') {
+      game.mapTheme = STAGE_MAP_THEMES[Math.floor(Math.random() * STAGE_MAP_THEMES.length)];
+      game.mapSeed = Math.floor(Math.random() * 0x7fffffff);
+    }
     setState(S.PLAYING);
     showScreen(null);
     document.activeElement && document.activeElement.blur && document.activeElement.blur();
@@ -6518,20 +6535,26 @@
     ctx.stroke();
     ctx.restore();
 
+    const stageTheme = game && game.mode === 'stage' ? game.mapTheme : null;
+    const mapBorder = stageTheme ? STAGE_MAP_BORDERS[stageTheme] : null;
+    if (stageTheme) {
+      drawStageMapBackground(camX, camY, stageTheme, game.mapSeed || 1);
+    }
+
     ctx.save();
-    ctx.strokeStyle = 'rgba(93,225,255,0.16)';
+    ctx.strokeStyle = mapBorder ? mapBorder.soft : 'rgba(93,225,255,0.16)';
     ctx.lineWidth = 2;
     ctx.setLineDash([24, 16]);
     ctx.strokeRect(14, 14, MAP.w - 28, MAP.h - 28);
     ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(93,225,255,0.52)';
+    ctx.strokeStyle = mapBorder ? mapBorder.strong : 'rgba(93,225,255,0.52)';
     ctx.lineWidth = 1.5;
     ctx.strokeRect(0, 0, MAP.w, MAP.h);
     ctx.restore();
 
     const corner = 90;
     ctx.save();
-    ctx.strokeStyle = 'rgba(93,225,255,0.58)';
+    ctx.strokeStyle = mapBorder ? mapBorder.strong : 'rgba(93,225,255,0.58)';
     ctx.lineWidth = 5;
     ctx.lineCap = 'square';
     const corners = [
@@ -6547,6 +6570,336 @@
       ctx.lineTo(c[0], c[1] + c[3] * corner);
       ctx.stroke();
     });
+    ctx.restore();
+  }
+
+  function stageHash(seed, x, y, salt) {
+    let h = Math.imul(seed | 0, 374761393) ^
+      Math.imul(x | 0, 668265263) ^
+      Math.imul(y | 0, 1274126177) ^
+      Math.imul((salt || 0) | 0, 2246822519);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function drawPixelPine(x, y, size, dark, light) {
+    ctx.fillStyle = dark;
+    for (let row = 0; row < 5; row += 1) {
+      const t = row / 4;
+      const width = size * (1 - t * 0.72);
+      const layerY = y - row * size * 0.18;
+      ctx.fillRect(Math.round(x - width * 0.5), Math.round(layerY), Math.round(width), Math.max(2, Math.round(size * 0.18)));
+    }
+    ctx.fillStyle = light;
+    for (let row = 0; row < 5; row += 1) {
+      const t = row / 4;
+      const width = size * (1 - t * 0.72);
+      const layerY = y - row * size * 0.18;
+      ctx.fillRect(Math.round(x - width * 0.3), Math.round(layerY), Math.round(width * 0.6), 2);
+    }
+    ctx.fillStyle = '#4b3b2b';
+    ctx.fillRect(Math.round(x - 2), Math.round(y + 2), 4, Math.round(size * 0.22));
+  }
+
+  function drawPixelCactus(x, y, size) {
+    const green = '#477b43';
+    const light = '#6c9f50';
+    ctx.fillStyle = green;
+    ctx.fillRect(Math.round(x - 3), Math.round(y - size), 6, size);
+    ctx.fillRect(Math.round(x - 12), Math.round(y - size * 0.55), 9, 5);
+    ctx.fillRect(Math.round(x - 12), Math.round(y - size * 0.55), 5, 14);
+    ctx.fillRect(Math.round(x + 3), Math.round(y - size * 0.72), 9, 5);
+    ctx.fillRect(Math.round(x + 8), Math.round(y - size * 0.72), 5, 12);
+    ctx.fillStyle = light;
+    ctx.fillRect(Math.round(x - 2), Math.round(y - size + 2), 2, Math.max(3, size - 4));
+    ctx.fillRect(Math.round(x - 10), Math.round(y - size * 0.55 + 1), 2, 4);
+  }
+
+  function drawPixelRock(x, y, size, color, shade) {
+    ctx.fillStyle = shade;
+    ctx.fillRect(Math.round(x - size * 0.5), Math.round(y - size * 0.2), Math.round(size), Math.round(size * 0.5));
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x - size * 0.38), Math.round(y - size * 0.36), Math.round(size * 0.74), Math.round(size * 0.34));
+    ctx.fillRect(Math.round(x - size * 0.25), Math.round(y - size * 0.46), Math.round(size * 0.44), Math.round(size * 0.14));
+  }
+
+  function drawPixelFlower(x, y, color) {
+    ctx.fillStyle = '#3f783f';
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 5);
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x - 2), Math.round(y - 2), 2, 2);
+    ctx.fillRect(Math.round(x + 1), Math.round(y - 2), 2, 2);
+    ctx.fillRect(Math.round(x - 1), Math.round(y - 4), 2, 2);
+  }
+
+  function drawPixelBush(x, y, size, color, highlight) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x - size * 0.5), Math.round(y - size * 0.4), Math.round(size), Math.round(size * 0.55));
+    ctx.fillRect(Math.round(x - size * 0.32), Math.round(y - size * 0.58), Math.round(size * 0.62), Math.round(size * 0.4));
+    ctx.fillStyle = highlight;
+    ctx.fillRect(Math.round(x - size * 0.28), Math.round(y - size * 0.55), Math.round(size * 0.25), 2);
+    ctx.fillRect(Math.round(x + size * 0.05), Math.round(y - size * 0.34), Math.round(size * 0.2), 2);
+  }
+
+  function drawStageMapBackground(camX, camY, theme, seed) {
+    const time = performance.now() * 0.001;
+    const left = Math.max(0, Math.floor(camX) - 80);
+    const top = Math.max(0, Math.floor(camY) - 80);
+    const right = Math.min(MAP.w, Math.ceil(camX + view.w) + 80);
+    const bottom = Math.min(MAP.h, Math.ceil(camY + view.h) + 80);
+    const width = Math.max(1, right - left);
+    const height = Math.max(1, bottom - top);
+    const horizonY = camY + 78;
+    const groundTop = Math.max(top, Math.floor(horizonY));
+
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+
+    if (theme === 'desert') {
+      ctx.fillStyle = '#c8954e';
+      ctx.fillRect(0, 0, MAP.w, MAP.h);
+      ctx.fillStyle = 'rgba(226, 178, 95, 0.28)';
+      for (let y = Math.floor(top / 190) * 190; y < bottom; y += 190) {
+        ctx.fillRect(left, y, width, 34);
+      }
+      for (let y = Math.floor(top / 78) * 78; y < bottom; y += 78) {
+        for (let x = Math.floor(left / 78) * 78; x < right; x += 78) {
+          const h = stageHash(seed, x, y, 11);
+          if (h > 0.7) {
+            ctx.fillStyle = h > 0.88 ? '#e2b96d' : '#b77e3f';
+            ctx.globalAlpha = 0.4;
+            ctx.fillRect(x + Math.floor(h * 30), y + Math.floor(h * 12), h > 0.88 ? 5 : 3, 2);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+      for (let y = Math.floor(groundTop / 220) * 220; y < bottom; y += 220) {
+        for (let x = Math.floor(left / 260) * 260; x < right; x += 260) {
+          const h = stageHash(seed, x, y, 21);
+          if (h < 0.13) drawPixelCactus(x + 40, y + 25, 34 + h * 30);
+          else if (h < 0.34) drawPixelRock(x + 70, y + 35, 16 + h * 28, '#d8a45a', '#aa7138');
+          else if (h > 0.9) {
+            ctx.fillStyle = 'rgba(111, 72, 38, 0.35)';
+            ctx.fillRect(x + 50, y + 18, 40, 7);
+            ctx.fillRect(x + 58, y + 11, 24, 7);
+          }
+        }
+      }
+      for (let y = Math.floor(groundTop / 760) * 760; y < bottom; y += 760) {
+        for (let x = Math.floor(left / 940) * 940; x < right; x += 940) {
+          const h = stageHash(seed, x, y, 31);
+          if (h > 0.5) {
+            const bx = x + 180;
+            const by = y + 110;
+            ctx.fillStyle = 'rgba(120, 78, 37, 0.42)';
+            ctx.fillRect(bx + 4, by + 10, 96, 10);
+            ctx.fillStyle = '#d1a05b';
+            ctx.fillRect(bx, by - 34, 24, 44);
+            ctx.fillRect(bx + 34, by - 52, 18, 62);
+            ctx.fillRect(bx + 60, by - 26, 34, 36);
+            ctx.fillStyle = '#9b6837';
+            ctx.fillRect(bx + 4, by - 28, 6, 28);
+            ctx.fillRect(bx + 38, by - 44, 5, 44);
+            ctx.fillRect(bx + 66, by - 20, 8, 20);
+            ctx.fillStyle = 'rgba(255, 225, 160, 0.16)';
+            ctx.fillRect(bx + 2, by - 34, 3, 24);
+            ctx.fillRect(bx + 36, by - 52, 3, 30);
+          }
+        }
+      }
+      ctx.strokeStyle = 'rgba(255, 233, 174, 0.16)';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i += 1) {
+        ctx.beginPath();
+        const waveY = camY + view.h * (0.54 + i * 0.11) + Math.sin(time * 0.8 + i) * 5;
+        for (let x = left; x <= right; x += 28) {
+          const y = waveY + Math.sin(x * 0.018 + time * 1.2 + i) * 4;
+          if (x === left) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      const dustCount = Math.min(34, Math.floor(width * height / 26000));
+      for (let i = 0; i < dustCount; i += 1) {
+        const h = stageHash(seed, i, 4, 61);
+        const x = left + ((h * width + time * (5 + (i % 3) * 3)) % width);
+        const y = top + ((stageHash(seed, i, 5, 62) * height + time * (2 + (i % 2))) % height);
+        ctx.fillStyle = i % 3 ? 'rgba(255, 226, 156, 0.38)' : 'rgba(255, 245, 207, 0.5)';
+        ctx.fillRect(Math.round(x), Math.round(y), i % 4 === 0 ? 3 : 2, 1);
+      }
+
+    } else if (theme === 'snow') {
+      ctx.fillStyle = '#b9d7e7';
+      ctx.fillRect(0, 0, MAP.w, MAP.h);
+      ctx.fillStyle = 'rgba(236, 249, 255, 0.4)';
+      for (let y = Math.floor(top / 150) * 150; y < bottom; y += 150) {
+        ctx.fillRect(left, y, width, 22);
+      }
+      for (let y = Math.floor(top / 96) * 96; y < bottom; y += 96) {
+        for (let x = Math.floor(left / 96) * 96; x < right; x += 96) {
+          const h = stageHash(seed, x, y, 12);
+          if (h > 0.58) {
+            ctx.fillStyle = h > 0.84 ? '#eefaff' : 'rgba(221, 243, 250, 0.7)';
+            ctx.fillRect(x + 15, y + 14, 20 + Math.floor(h * 18), 3);
+          }
+        }
+      }
+      ctx.strokeStyle = 'rgba(103, 175, 201, 0.26)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let y = Math.floor(groundTop / 180) * 180; y < bottom; y += 180) {
+        ctx.moveTo(left, y);
+        for (let x = left; x < right; x += 64) {
+          ctx.lineTo(x, y + (stageHash(seed, x, y, 14) > 0.5 ? 8 : -4));
+        }
+      }
+      ctx.stroke();
+      for (let y = Math.floor(groundTop / 210) * 210; y < bottom; y += 210) {
+        for (let x = Math.floor(left / 250) * 250; x < right; x += 250) {
+          const h = stageHash(seed, x, y, 22);
+          if (h < 0.33) drawPixelPine(x + 55, y + 52, 30 + h * 34, '#2d5c68', '#dff5ff');
+          else if (h < 0.42) drawPixelRock(x + 78, y + 45, 18 + h * 24, '#dff3fa', '#7ea9bb');
+          else if (h > 0.74) {
+            ctx.fillStyle = 'rgba(232, 250, 255, 0.38)';
+            ctx.fillRect(x + 25, y + 36, 82, 8);
+            ctx.fillRect(x + 42, y + 28, 46, 8);
+          }
+        }
+      }
+      for (let y = Math.floor(groundTop / 720) * 720; y < bottom; y += 720) {
+        for (let x = Math.floor(left / 860) * 860; x < right; x += 860) {
+          const h = stageHash(seed, x, y, 32);
+          if (h > 0.45) {
+            const gx = x + 230;
+            const gy = y + 100;
+            ctx.fillStyle = 'rgba(132, 198, 220, 0.32)';
+            ctx.fillRect(gx + 12, gy + 8, 112, 8);
+            ctx.fillStyle = '#c4e8f3';
+            ctx.fillRect(gx, gy - 42, 34, 50);
+            ctx.fillRect(gx + 36, gy - 62, 24, 70);
+            ctx.fillRect(gx + 62, gy - 34, 46, 42);
+            ctx.fillStyle = '#8bbdcd';
+            ctx.fillRect(gx + 6, gy - 34, 7, 34);
+            ctx.fillRect(gx + 42, gy - 56, 7, 56);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+            ctx.fillRect(gx + 2, gy - 42, 4, 34);
+            ctx.fillRect(gx + 38, gy - 62, 4, 44);
+          }
+        }
+      }
+      const sky = ctx.createLinearGradient(0, camY - 20, 0, camY + 110);
+      sky.addColorStop(0, 'rgba(17, 43, 70, 0.78)');
+      sky.addColorStop(1, 'rgba(99, 151, 177, 0)');
+      ctx.fillStyle = sky;
+      ctx.fillRect(camX - 80, camY - 80, view.w + 160, 200);
+      for (let band = 0; band < 3; band += 1) {
+        ctx.strokeStyle = band === 1 ? 'rgba(134, 255, 213, 0.16)' : 'rgba(111, 203, 255, 0.12)';
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        for (let x = camX - 80; x <= camX + view.w + 80; x += 30) {
+          const y = camY + 18 + band * 18 + Math.sin(x * 0.006 + time * 0.25 + band) * 12;
+          if (x === camX - 80) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      const windCount = Math.min(42, Math.floor(width * height / 21000));
+      for (let i = 0; i < windCount; i += 1) {
+        const layer = i % 3;
+        const h = stageHash(seed, i, 7, 71);
+        const speed = 9 + layer * 12;
+        const x = left + ((h * width + time * speed) % width);
+        const y = top + ((stageHash(seed, i, 8, 72) * height + time * (5 + layer * 4)) % height);
+        ctx.fillStyle = layer === 0 ? 'rgba(255,255,255,0.35)' : layer === 1 ? 'rgba(235,250,255,0.55)' : 'rgba(210,242,255,0.7)';
+        const s = layer === 2 ? 3 : 2;
+        ctx.fillRect(Math.round(x), Math.round(y), s, s);
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 5; i += 1) {
+        const wy = camY + 130 + i * 44;
+        ctx.beginPath();
+        ctx.moveTo(camX + 20 + i * 31, wy);
+        ctx.lineTo(camX + 170 + i * 49, wy + 5);
+        ctx.stroke();
+      }
+
+    } else if (theme === 'grass') {
+      ctx.fillStyle = '#5f9e50';
+      ctx.fillRect(0, 0, MAP.w, MAP.h);
+      ctx.fillStyle = 'rgba(145, 193, 92, 0.26)';
+      for (let y = Math.floor(top / 130) * 130; y < bottom; y += 130) {
+        ctx.fillRect(left, y, width, 28);
+      }
+      for (let y = Math.floor(top / 84) * 84; y < bottom; y += 84) {
+        for (let x = Math.floor(left / 84) * 84; x < right; x += 84) {
+          const h = stageHash(seed, x, y, 13);
+          if (h > 0.7) {
+            ctx.fillStyle = h > 0.88 ? '#8dbc5f' : '#4c8747';
+            ctx.fillRect(x + 11, y + 16, 5, 2);
+          }
+        }
+      }
+      const sky = ctx.createLinearGradient(0, camY - 30, 0, camY + 92);
+      sky.addColorStop(0, '#75bee4');
+      sky.addColorStop(1, 'rgba(117, 190, 228, 0)');
+      ctx.fillStyle = sky;
+      ctx.fillRect(camX - 80, camY - 80, view.w + 160, 190);
+      ctx.fillStyle = '#587b69';
+      ctx.beginPath();
+      ctx.moveTo(camX - 40, camY + 92);
+      for (let x = camX - 40; x <= camX + view.w + 40; x += 76) {
+        const peak = 28 + stageHash(seed, x, 0, 33) * 40;
+        ctx.lineTo(x, camY + 92 - peak);
+        ctx.lineTo(x + 38, camY + 92);
+      }
+      ctx.lineTo(camX + view.w + 80, camY + 100);
+      ctx.lineTo(camX - 80, camY + 100);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(235, 250, 255, 0.55)';
+      for (let i = 0; i < 4; i += 1) {
+        const cloudX = camX + ((time * (4 + i) + i * 230) % (view.w + 300)) - 120;
+        const cloudY = camY + 18 + i * 11;
+        ctx.fillRect(Math.round(cloudX), Math.round(cloudY), 54, 7);
+        ctx.fillRect(Math.round(cloudX + 12), Math.round(cloudY - 6), 28, 6);
+      }
+      for (let y = Math.floor(groundTop / 150) * 150; y < bottom; y += 150) {
+        for (let x = Math.floor(left / 160) * 160; x < right; x += 160) {
+          const h = stageHash(seed, x, y, 23);
+          if (h > 0.82) drawPixelBush(x + 44, y + 40, 22 + h * 22, '#356f3b', '#76a94f');
+          else if (h > 0.62) drawPixelFlower(x + 25, y + 30, h > 0.76 ? '#fff2a8' : h > 0.69 ? '#f5a2c5' : '#e8f4ff');
+        }
+      }
+      ctx.strokeStyle = 'rgba(39, 96, 52, 0.42)';
+      ctx.lineWidth = 1;
+      const grassCount = Math.min(90, Math.floor(width * height / 12000));
+      for (let i = 0; i < grassCount; i += 1) {
+        const gx = left + stageHash(seed, i, 2, 41) * width;
+        const gy = top + stageHash(seed, i, 3, 42) * height;
+        const sway = Math.sin(time * 1.3 + i * 1.7) * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.round(gx), Math.round(gy));
+        ctx.lineTo(Math.round(gx + sway), Math.round(gy - 5));
+        ctx.stroke();
+      }
+      for (let i = 0; i < 3; i += 1) {
+        const cx = camX + ((time * (7 + i * 3) + i * 270) % (view.w + 420)) - 160;
+        const cy = camY + 130 + i * 120;
+        ctx.fillStyle = 'rgba(31, 66, 44, 0.1)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 120, 28, 0, 0, TAU);
+        ctx.fill();
+      }
+      for (let i = 0; i < 16; i += 1) {
+        const h = stageHash(seed, i, 9, 51);
+        const x = left + ((h * width + time * (5 + (i % 4) * 2)) % width);
+        const y = top + ((stageHash(seed, i, 10, 52) * height - time * (2 + (i % 3))) % height + height) % height;
+        ctx.fillStyle = 'rgba(248, 247, 198, 0.55)';
+        ctx.fillRect(Math.round(x), Math.round(y), 2, 2);
+      }
+    }
+
     ctx.restore();
   }
 

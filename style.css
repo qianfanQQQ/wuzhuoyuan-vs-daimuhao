@@ -630,6 +630,67 @@ body[data-state="playing"] .pause-button {
   opacity: 0.95;
 }
 
+.mode-button-stage {
+  min-height: 96px;
+  grid-template-columns: 58px minmax(0, 1fr) 26px;
+  gap: 16px;
+  padding: 15px 20px;
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.mode-button-stage .mode-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  font-size: 30px;
+}
+
+.mode-button-stage .mode-copy {
+  gap: 5px;
+}
+
+.mode-button-stage .mode-copy strong {
+  font-size: 24px;
+  letter-spacing: 0.04em;
+}
+
+.mode-button-stage .mode-copy small {
+  font-size: 12px;
+}
+
+.mode-button-survival {
+  min-height: 52px;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  gap: 10px;
+  padding: 7px 14px;
+  opacity: 0.9;
+}
+
+.mode-button-survival .mode-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 18px;
+}
+
+.mode-button-survival .mode-copy {
+  gap: 2px;
+}
+
+.mode-button-survival .mode-copy strong {
+  font-size: 14px;
+}
+
+.mode-button-survival .mode-copy small {
+  font-size: 10px;
+}
+
+.mode-button-survival .button-arrow {
+  font-size: 17px;
+}
+
 .records-panel {
   position: relative;
   padding: 28px;
@@ -1686,6 +1747,48 @@ body.touch[data-state="playing"] .touch-controls {
 
   .mode-button .mode-copy small {
     font-size: 10px;
+  }
+
+  .mode-button.mode-button-stage {
+    grid-template-columns: 48px minmax(0, 1fr) 22px;
+    min-height: 84px;
+    gap: 12px;
+    padding: 12px 15px;
+  }
+
+  .mode-button-stage .mode-icon {
+    width: 46px;
+    height: 46px;
+    font-size: 26px;
+  }
+
+  .mode-button-stage .mode-copy strong {
+    font-size: 21px;
+  }
+
+  .mode-button-stage .mode-copy small {
+    font-size: 10px;
+  }
+
+  .mode-button.mode-button-survival {
+    grid-template-columns: 30px minmax(0, 1fr) 17px;
+    min-height: 46px;
+    gap: 9px;
+    padding: 6px 12px;
+  }
+
+  .mode-button-survival .mode-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .mode-button-survival .mode-copy strong {
+    font-size: 13px;
+  }
+
+  .mode-button-survival .mode-copy small {
+    font-size: 9px;
   }
 
   .record-item {
