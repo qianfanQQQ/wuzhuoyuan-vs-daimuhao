@@ -824,8 +824,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-10';
-  const BULLET_VERSION = '20261020-10';
+  const AVATAR_VERSION = '20261020-11';
+  const BULLET_VERSION = '20261020-11';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1316,6 +1316,9 @@
     pauseButton: $('pauseButton'),
     startSurvivalBtn: $('startSurvivalBtn'),
     startStageBtn: $('startStageBtn'),
+    rotateHint: $('rotateHint'),
+    rotateLockBtn: $('rotateLockBtn'),
+    rotateHintMsg: $('rotateHintMsg'),
     instructionsBtn: $('instructionsBtn'),
     instructionsModal: $('instructionsModal'),
     closeInstructionsBtn: $('closeInstructionsBtn'),
@@ -1426,6 +1429,7 @@
 
   let state = S.MENU;
   let game = null;
+  let orientationPause = false;
   let lastFrameTime = performance.now();
   let activeStore = null;
   let storeReturn = null;
@@ -2581,9 +2585,14 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', resizeCanvas);
     }
+    window.addEventListener('resize', syncOrientationGate);
     window.addEventListener('orientationchange', function () {
-      window.setTimeout(resizeCanvas, 180);
+      window.setTimeout(function () {
+        resizeCanvas();
+        syncOrientationGate();
+      }, 180);
     });
+    document.addEventListener('fullscreenchange', syncOrientationGate);
 
     function bindTouchAction(button, action) {
       if (!button) return;
@@ -2774,8 +2783,49 @@
     }
   }
 
+  async function requestLandscapeMode() {
+    if (!hasTouch) return;
+    let failed = false;
+    try {
+      const root = document.documentElement;
+      if (root.requestFullscreen && !document.fullscreenElement) {
+        await root.requestFullscreen({ navigationUI: 'hide' });
+      }
+    } catch (error) {
+      failed = true;
+    }
+    try {
+      if (screen.orientation && typeof screen.orientation.lock === 'function') {
+        await screen.orientation.lock('landscape');
+      } else {
+        failed = true;
+      }
+    } catch (error) {
+      failed = true;
+    }
+    if (failed && el.rotateHintMsg && window.innerHeight > window.innerWidth) {
+      el.rotateHintMsg.textContent = '浏览器未允许自动旋转，请手动将手机横置。';
+    }
+  }
+
+  function syncOrientationGate() {
+    const portrait = window.innerHeight > window.innerWidth;
+    document.body.classList.toggle('is-portrait', hasTouch && portrait);
+    if (!hasTouch) return;
+    if (portrait) {
+      if (state === S.PLAYING) {
+        orientationPause = true;
+        pauseGame();
+      }
+    } else if (orientationPause) {
+      orientationPause = false;
+      if (state === S.PAUSED) resumeGame();
+    }
+  }
+
   function startGame(mode) {
     closeStatsPanel();
+    if (hasTouch) requestLandscapeMode();
     hideScreens();
     hideInstructions();
     activeStore = null;
@@ -2790,6 +2840,7 @@
     }
     setState(S.PLAYING);
     showScreen(null);
+    syncOrientationGate();
     document.activeElement && document.activeElement.blur && document.activeElement.blur();
     input.mouse.down = false;
     input.mouse.seen = false;
@@ -6724,16 +6775,6 @@
           }
         }
       }
-      ctx.strokeStyle = 'rgba(103, 175, 201, 0.26)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let y = Math.floor(groundTop / 180) * 180; y < bottom; y += 180) {
-        ctx.moveTo(left, y);
-        for (let x = left; x < right; x += 64) {
-          ctx.lineTo(x, y + (stageHash(seed, x, y, 14) > 0.5 ? 8 : -4));
-        }
-      }
-      ctx.stroke();
       for (let y = Math.floor(groundTop / 210) * 210; y < bottom; y += 210) {
         for (let x = Math.floor(left / 250) * 250; x < right; x += 250) {
           const h = stageHash(seed, x, y, 22);
@@ -8130,7 +8171,9 @@
     if (!game) return;
     const compact = view.w < 1180;
 
-    if (compact) {
+    if (hasTouch && view.w > view.h) {
+      drawMobileLandscapeHUD(now);
+    } else if (compact) {
       drawCompactHUD(now);
     } else {
       drawDesktopHUD(now);
@@ -8361,6 +8404,91 @@
     setMonoFont(9, 800);
     ctx.fillStyle = p.dashCd <= 0 ? '#66e6a8' : '#7d96a8';
     ctx.fillText(p.dashCd <= 0 ? '就绪' : p.dashCd.toFixed(1) + 's', x + w - 13, y + 21);
+  }
+
+  function drawMobileLandscapeHUD(now) {
+    const p = game.player;
+    const form = getCurrentForm();
+    const equippedSkin = getEquippedSkin();
+
+    const topW = Math.min(220, Math.max(190, view.w * 0.3));
+    const topX = view.w * 0.5 - topW * 0.5;
+    drawPanel(topX, 8, topW, 42, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
+    setMonoFont(9, 800);
+    ctx.fillStyle = '#9ec4d6';
+    ctx.fillText('⏱ ' + formatTime(game.time), topX + 10, 23);
+    ctx.fillStyle = '#ffcf66';
+    ctx.fillText('☠ ' + formatNumber(game.kills), topX + 84, 23);
+    ctx.textAlign = 'left';
+    setFont(7.5, 600);
+    ctx.fillStyle = '#627f91';
+    ctx.fillText(weaponObjectiveText(), topX + 10, 38);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#a5bcca';
+    ctx.fillText(form ? (form.shortName || form.name) : 'EDG', topX + topW - 10, 38);
+
+    const panelW = Math.min(220, Math.max(170, view.w * 0.27));
+    const panelH = 66;
+    const panelX = 12;
+    const panelY = view.h - 190;
+    drawPanel(panelX, panelY, panelW, panelH, 12, 'rgba(8,15,24,0.88)', 'rgba(255,123,111,0.24)');
+    drawCircularAvatar(getEquippedAvatar(), panelX + 22, panelY + 33, 19, equippedSkin.ring, { ringWidth: 1.8 });
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(panelX + 37, panelY + 49, 7, 0, TAU);
+    ctx.fillStyle = '#08131e';
+    ctx.fill();
+    ctx.strokeStyle = '#5de1ff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    setMonoFont(6, 800);
+    ctx.fillStyle = '#c9f5ff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Lv.' + game.level, panelX + 37, panelY + 49.5);
+    ctx.restore();
+
+    const barX = panelX + 48;
+    const barW = panelW - 58;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    setFont(8.5, 800);
+    ctx.fillStyle = '#dceaf2';
+    ctx.fillText('Lv.' + game.level + ' · ' + (form ? (form.shortName || form.name) : 'EDG'), barX, panelY + 15);
+    drawBar(barX, panelY + 21, barW, 10, p.hp / p.maxHp, '#ff536f', '#ffad54', 'rgba(255,255,255,0.08)');
+    setMonoFont(7, 800);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff0f2';
+    ctx.fillText(Math.ceil(p.hp) + '/' + Math.ceil(p.maxHp), barX + barW * 0.5, panelY + 29);
+    drawBar(barX, panelY + 36, barW, 3.5, game.xp / game.xpToNext, '#5de1ff', '#a78bfa', 'rgba(255,255,255,0.07)');
+    ctx.textAlign = 'left';
+    setFont(7, 600);
+    ctx.fillStyle = p.dashCd <= 0 ? '#66e6a8' : '#71899a';
+    ctx.fillText('冲刺 ' + (p.dashCd <= 0 ? '就绪' : p.dashCd.toFixed(1) + 's'), barX, panelY + 53);
+
+    const wpW = 156;
+    const wpH = 48;
+    const wpX = view.w - wpW - 12;
+    const wpY = view.h < 340 ? 50 : 68;
+    drawPanel(wpX, wpY, wpW, wpH, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
+    drawWeaponIcon(p.weapon, wpX + 16, wpY + 16, 14, WEAPONS[p.weapon].color);
+    ctx.textAlign = 'left';
+    setFont(10, 800);
+    ctx.fillStyle = '#eaf8ff';
+    ctx.fillText(WEAPONS[p.weapon].name, wpX + 34, wpY + 14);
+    const infinite = hasInfiniteAmmo();
+    setMonoFont(infinite ? 13 : 15, 800);
+    ctx.fillStyle = infinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
+    ctx.fillText(infinite ? '∞' : String(p.ammo[p.weapon]), wpX + 34, wpY + 33);
+    setMonoFont(8, 700);
+    ctx.fillStyle = '#70889a';
+    ctx.fillText(infinite ? '无限' : '/ ' + weaponMaxMag(p.weapon), wpX + 58, wpY + 33);
+    ctx.textAlign = 'right';
+    setFont(7, 600);
+    ctx.fillStyle = p.reloading ? '#ffcf66' : '#607b8e';
+    ctx.fillText(p.reloading ? '装填 ' + p.reloadRemaining.toFixed(1) + 's' : 'R 换弹', wpX + wpW - 9, wpY + 41);
   }
 
   function drawCompactHUD(now) {
@@ -8973,6 +9101,11 @@
       audio.ensure();
       startGame('stage');
     });
+    if (el.rotateLockBtn) {
+      el.rotateLockBtn.addEventListener('click', function () {
+        requestLandscapeMode();
+      });
+    }
     el.instructionsBtn.addEventListener('click', showInstructions);
     el.closeInstructionsBtn.addEventListener('click', hideInstructions);
     el.instructionsDoneBtn.addEventListener('click', hideInstructions);
@@ -9016,6 +9149,7 @@
     // 将旧版存档补齐金币/皮肤字段，同时保留原有最佳成绩与设置。
     persistSave();
     resizeCanvas();
+    syncOrientationGate();
     bindUI();
     setupInput();
 
