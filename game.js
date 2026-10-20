@@ -36,6 +36,8 @@
   };
 
   const WEAPON_ORDER = ['pistol', 'smg', 'shotgun', 'sniper', 'rocket'];
+  // 火箭筒强化只在这里乘一次：直击基础伤害和爆炸基础伤害同时变为原来的 3 倍。
+  const ROCKET_DAMAGE_MULTIPLIER = 3;
 
   const WEAPONS = {
     pistol: {
@@ -126,7 +128,7 @@
       key: 5,
       name: '火箭筒',
       short: '火箭筒',
-      damage: 58,
+      damage: 58 * ROCKET_DAMAGE_MULTIPLIER,
       fireInterval: 1.32,
       mag: 1,
       reloadTime: 2.55,
@@ -141,7 +143,7 @@
       shake: 7.5,
       unlockLevel: 7,
       sound: 'shoot_rocket',
-      splashDamage: 105,
+      splashDamage: 105 * ROCKET_DAMAGE_MULTIPLIER,
       splashRadius: 152,
       desc: '命中后爆炸，对范围内敌人造成伤害。'
     }
@@ -811,8 +813,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-7';
-  const BULLET_VERSION = '20261020-7';
+  const AVATAR_VERSION = '20261020-8';
+  const BULLET_VERSION = '20261020-8';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1159,6 +1161,12 @@
 
   function isFreezeActive() {
     return isChampionForm() && isSkillActive('q');
+  }
+
+  function currentUltimateUsesSpace() {
+    const form = getCurrentForm();
+    return !!(form && form.implemented && form.skills && form.skills.r &&
+      form.skills.r.code === 'Space');
   }
 
   function hasInfiniteAmmo() {
@@ -2387,7 +2395,7 @@
 
   function onKeyDown(event) {
     const code = event.code;
-    const gameKeys = ['Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyQ', 'KeyE', 'KeyR', 'KeyP', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+    const gameKeys = ['Space', 'ShiftLeft', 'ShiftRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyQ', 'KeyE', 'KeyR', 'KeyP', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
     if (gameKeys.indexOf(code) !== -1 && state !== S.MENU) {
       event.preventDefault();
     }
@@ -2460,14 +2468,24 @@
       return;
     }
     if (code === 'KeyR') {
-      castSkill('r');
+      tryReload(false);
       return;
     }
     if (code === 'KeyF') {
+      // F 保留为备用换弹键；R 是恢复到原项目的正式换弹键。
       tryReload(false);
       return;
     }
     if (code === 'Space') {
+      if (currentUltimateUsesSpace()) {
+        // 空格在已实现终极技能的形态下只释放大招，不再触发冲刺。
+        castSkill('r');
+        return;
+      }
+      tryDash();
+      return;
+    }
+    if (code === 'ShiftLeft' || code === 'ShiftRight') {
       tryDash();
       return;
     }
@@ -3016,7 +3034,7 @@
         if (r.recordRemaining <= 0) {
           r.phase = 'confirm';
           r.windowRemaining = 2;
-          addToast('记录完成 · 2 秒内再次按 R 回溯', 'good', 2.1);
+          addToast('记录完成 · 2 秒内再次按空格回溯', 'good', 2.1);
           refreshSkillBar(true);
           refreshStatsPanel(true);
         }
@@ -7942,7 +7960,7 @@
       setFont(8.5, 600);
       ctx.fillStyle = '#607b8e';
       ctx.textAlign = 'right';
-      ctx.fillText('F 换弹', x + w - 12, y + 72);
+      ctx.fillText('R 换弹', x + w - 12, y + 72);
     }
 
     const slotsY = y + 82;
@@ -8103,7 +8121,7 @@
       ctx.textAlign = 'right';
       setFont(7.5, 600);
       ctx.fillStyle = '#607b8e';
-      ctx.fillText('F 换弹', wpX + wpW - 9, wpY + 48);
+      ctx.fillText('R 换弹', wpX + wpW - 9, wpY + 48);
     }
   }
 
@@ -8289,7 +8307,7 @@
     const compact = view.w < 760;
     const text = hasTouch
       ? '左摇杆移动 · 右摇杆瞄准 · 开火按钮射击'
-      : 'WASD 移动 · 鼠标瞄准/射击 · F 换弹 · Q/E/R 技能 · 空格冲刺 · 1-5 切枪';
+      : 'WASD 移动 · 鼠标瞄准/射击 · R 换弹 · Q/E/空格 技能 · Shift 冲刺 · 1-5 切枪';
     const narrow = view.w < 390;
     const y = compact
       ? (game.boss ? (narrow ? 268 : 280) : (narrow ? 226 : 230))
@@ -8392,8 +8410,10 @@
       const mask = button.querySelector('.skill-cd-mask');
       const timer = button.querySelector('.skill-timer');
       const nameNode = button.querySelector('.skill-name');
+      const keyNode = button.querySelector('.skill-key');
       const icon = button.querySelector('.skill-icon');
       if (nameNode) nameNode.textContent = def.name;
+      if (keyNode) keyNode.textContent = hasTouch ? def.slot : (def.keyLabel || def.slot);
       if (icon) {
         const expected = def.icon + '?v=' + AVATAR_VERSION;
         if (icon.getAttribute('src') !== expected) icon.setAttribute('src', expected);
@@ -8431,7 +8451,7 @@
           button.classList.add('is-r-ready');
           mask.style.height = '0%';
           timer.textContent = r.windowRemaining.toFixed(1) + 's';
-          button.title = '十六强重开 · 再按 R 回溯，确认窗口 ' + r.windowRemaining.toFixed(1) + 's';
+          button.title = '十六强重开 · 再按空格回溯，确认窗口 ' + r.windowRemaining.toFixed(1) + 's';
         } else if (r.cooldown > 0) {
           button.classList.add('is-r-charging');
           mask.style.height = (clamp(r.cooldown / def.cooldown, 0, 1) * 100).toFixed(1) + '%';
@@ -8506,7 +8526,7 @@
         rShots = '—';
       } else if (r.phase === 'confirm') {
         rCharge = '确认 ' + r.windowRemaining.toFixed(1) + 's';
-        rShots = '可按 R 回溯';
+        rShots = '可按空格回溯';
       } else if (r.cooldown > 0) {
         rCharge = '冷却 ' + Math.ceil(r.cooldown) + 's';
         rShots = '—';

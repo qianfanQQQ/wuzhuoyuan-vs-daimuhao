@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    《吴卓远大战代牧豪》— 暗色现代游戏 UI
    纯 HTML / CSS / Canvas，无外部资源
    ========================================================= */
@@ -3982,18 +3982,18 @@ body.touch .stats-grid {
 }
 
 body.touch .skill-bar {
-  left: calc(max(16px, env(safe-area-inset-left)) + 124px);
-  bottom: max(154px, calc(env(safe-area-inset-bottom) + 154px));
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  transform: none;
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+  transform: translateX(-50%);
 }
 
 body.touch .skill-slot {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
 }
 
 body.touch .skill-key {
@@ -4016,10 +4016,43 @@ body.touch .skill-lock-note {
   white-space: normal;
 }
 
+@media (max-width: 387px) {
+  body.touch .skill-bar {
+    gap: 6px;
+  }
+
+  body.touch .skill-slot {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 371px) {
+  body.touch .skill-bar {
+    gap: 4px;
+  }
+
+  body.touch .skill-slot {
+    width: 36px;
+    height: 36px;
+  }
+
+  body.touch .skill-timer {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 355px) {
+  body.touch .joystick-base {
+    width: 88px;
+    height: 88px;
+  }
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   body.touch .skill-bar {
     left: 50%;
-    bottom: max(8px, env(safe-area-inset-bottom));
+    bottom: max(10px, env(safe-area-inset-bottom));
     flex-direction: row;
     align-items: flex-end;
     gap: 5px;
