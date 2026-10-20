@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-16';
-  const BULLET_VERSION = '20261020-16';
+  const AVATAR_VERSION = '20261020-17';
+  const BULLET_VERSION = '20261020-17';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -3026,6 +3026,14 @@
         best = enemy;
       }
     }
+    if (game.eventBossActive && game.eventBoss &&
+        !game.eventBoss.dead && !game.eventBoss.defeated) {
+      const d2 = distSq(x, y, game.eventBoss.x, game.eventBoss.y);
+      if (d2 < bestDistSq) {
+        bestDistSq = d2;
+        best = game.eventBoss;
+      }
+    }
     return best;
   }
 
@@ -4922,6 +4930,7 @@
   }
 
   function executeEventBossTelegraph(boss, telegraph) {
+    const p = game.player;
     const phase2 = boss.enraged;
     const type = telegraph.type;
     if (type === 'fan') {
@@ -8882,7 +8891,7 @@
     const form = getCurrentForm();
     const equippedSkin = getEquippedSkin();
 
-    if (!game.bossActive) {
+    if (!game.bossActive && !game.eventBossActive) {
       const topW = Math.min(220, Math.max(190, view.w * 0.3));
       const topX = view.w * 0.5 - topW * 0.5;
       drawPanel(topX, 8, topW, 42, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
@@ -9139,6 +9148,31 @@
   function drawEventBossHUD() {
     if (!game || !game.eventBoss || !game.eventBossActive || game.eventBoss.dead) return;
     const boss = game.eventBoss;
+    if (hasTouch && view.w > view.h) {
+      const w = Math.min(420, Math.max(220, view.w - 360));
+      const x = view.w * 0.5 - w * 0.5;
+      const y = 4;
+      const accent = boss.enraged ? '#ff5a78' : '#ff8b72';
+      drawPanel(x - 8, y, w + 16, 48, 10, 'rgba(9,11,18,0.9)', accent);
+      ctx.textAlign = 'left';
+      setFont(9.5, 800);
+      ctx.fillStyle = '#ffe7e5';
+      ctx.fillText('☠ ' + boss.name + ' · ' + boss.title, x + 2, y + 14);
+      ctx.textAlign = 'right';
+      setMonoFont(7.5, 700);
+      ctx.fillStyle = boss.enraged ? '#ff5a78' : '#ff96a5';
+      ctx.fillText(boss.enraged ? '狂暴' : '阶段 I', x + w - 2, y + 14);
+      const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
+      drawBar(x + 2, y + 20, w - 4, 7, ratio, boss.enraged ? '#ff5a3c' : '#ff5a78', '#ffcf66', 'rgba(255,255,255,0.08)');
+      ctx.textAlign = 'left';
+      setMonoFont(7, 700);
+      ctx.fillStyle = '#f4e7df';
+      ctx.fillText(formatNumber(Math.max(0, boss.hp)) + ' / ' + formatNumber(boss.maxHp), x + 2, y + 40);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#8499a6';
+      ctx.fillText(boss.enraged ? 'PHASE II' : 'PHASE I', x + w - 2, y + 40);
+      return;
+    }
     const compact = view.w < 1180;
     const w = compact ? view.w - 24 : Math.min(680, view.w - 480);
     const x = view.w * 0.5 - w * 0.5;
