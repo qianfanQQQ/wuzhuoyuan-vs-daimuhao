@@ -246,6 +246,14 @@
     return map;
   }, Object.create(null));
 
+  // 每个非默认皮肤的玩家子弹贴图。EDG 不在表内，继续使用原绘制。
+  const BULLET_FX = {
+    edg2026: { file: 'edg2026-pomegranate.png', trail: '#ff6a7e' },
+    korean: { file: 'korean-kimchi.png', trail: '#ff9a4a' },
+    bride: { file: 'bride-flower.png', trail: '#ffd7e8' },
+    nun: { file: 'nun-black-sword.png', trail: '#b8a2ff' }
+  };
+
   // 关卡金币公式集中在这里，后续只改这两个数字即可。
   const STAGE_COIN_BASE = 100;
   const STAGE_COIN_STEP = 50;
@@ -650,11 +658,13 @@
   /* =======================================================
      头像素材加载
      敌人固定使用 assets/enemy.png；玩家按当前装备皮肤读取
-     assets/skins/*.png，旧版 player.png 仅保留兼容。
-     路径以 game.js 的真实位置为基准解析，避免页面被部署到
-     子目录或从不同入口打开时把 assets 解析到错误位置。
+     assets/skins/*.png，非默认皮肤子弹读取 assets/bullets/*.png。
+     旧版 player.png 仅保留兼容。路径以 game.js 的真实位置为
+     基准解析，避免页面被部署到子目录或从不同入口打开时把
+     assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-1';
+  const AVATAR_VERSION = '20261020-2';
+  const BULLET_VERSION = '20261020-2';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -701,6 +711,13 @@
         url.searchParams.set(key, String(extraParams[key]));
       });
     }
+    return url.href;
+  }
+
+  function buildBulletUrl(fileName, retry) {
+    const url = new URL('assets/bullets/' + fileName, AVATAR_BASE_URL);
+    url.searchParams.set('v', BULLET_VERSION);
+    if (retry) url.searchParams.set('retry', String(retry));
     return url.href;
   }
 
@@ -922,6 +939,92 @@
   function skinImageSrc(skin) {
     return buildAvatarUrl('skins/' + skin.file);
   }
+
+  function getEquippedBulletFx() {
+    const skin = getEquippedSkin();
+    if (!skin || skin.id === DEFAULT_SKIN_ID) return null;
+    const config = BULLET_FX[skin.id];
+    const entry = bulletFxEntries[skin.id];
+    if (!config || !entry || !entry.loaded) return null;
+    return { id: skin.id, entry: entry, trail: config.trail };
+  }
+
+  // 四张子弹贴图只在启动时加载一次；绘制时直接复用 image，避免每帧创建图片。
+  const bulletDebug = {};
+  const bulletFxEntries = {};
+  window.__bulletDebug = bulletDebug;
+
+  function createBulletFxEntry(skinId, config) {
+    const debug = {
+      skinId: skinId,
+      file: 'assets/bullets/' + config.file,
+      status: 'loading',
+      url: '',
+      attempts: 0,
+      width: 0,
+      height: 0,
+      error: null
+    };
+    bulletDebug[skinId] = debug;
+    const entry = {
+      image: new Image(),
+      loaded: false,
+      failed: false,
+      attempts: 0,
+      currentUrl: '',
+      file: config.file
+    };
+
+    function applySource(retry) {
+      entry.attempts += 1;
+      debug.attempts = entry.attempts;
+      entry.currentUrl = buildBulletUrl(config.file, retry);
+      debug.url = entry.currentUrl;
+      entry.image.src = entry.currentUrl;
+    }
+
+    entry.image.decoding = 'async';
+    entry.image.loading = 'eager';
+    entry.image.onload = function () {
+      if (!entry.image.naturalWidth || !entry.image.naturalHeight) {
+        entry.failed = true;
+        debug.status = 'fallback';
+        debug.error = '图片加载完成但尺寸为 0';
+        return;
+      }
+      entry.loaded = true;
+      entry.failed = false;
+      debug.status = 'loaded';
+      debug.width = entry.image.naturalWidth;
+      debug.height = entry.image.naturalHeight;
+      debug.error = null;
+      console.info(
+        '[BulletFX] ' + skinId + ' 子弹贴图加载成功',
+        { url: entry.currentUrl, size: debug.width + '×' + debug.height, attempts: entry.attempts }
+      );
+    };
+    entry.image.onerror = function () {
+      if (entry.attempts < 2) {
+        applySource(entry.attempts);
+        return;
+      }
+      entry.loaded = false;
+      entry.failed = true;
+      debug.status = 'fallback';
+      debug.error = new Error('图片请求失败: ' + entry.currentUrl);
+      console.warn(
+        '[BulletFX] ' + skinId + ' 子弹贴图加载失败，将回退到原子弹绘制',
+        { url: entry.currentUrl, attempts: entry.attempts }
+      );
+    };
+
+    applySource(0);
+    return entry;
+  }
+
+  Object.keys(BULLET_FX).forEach(function (skinId) {
+    bulletFxEntries[skinId] = createBulletFxEntry(skinId, BULLET_FX[skinId]);
+  });
 
   // 一次性生成头像底部压暗层，避免每个敌人每帧创建渐变，保证长时间运行稳定。
   const avatarShadeCanvas = document.createElement('canvas');
@@ -4650,13 +4753,39 @@
     ctx.restore();
   }
 
+  function playerBulletSpriteSize(bullet) {
+    if (bullet.kind === 'rocket') return 78;
+    if (bullet.kind === 'sniper') return 64;
+    if (bullet.kind === 'shotgun') return 42;
+    if (bullet.kind === 'smg') return 46;
+    return 58;
+  }
+
   function drawBullets() {
+    // 每帧只取一次当前皮肤，避免逐颗子弹查表；EDG 返回 null，继续原绘制。
+    const equippedFx = getEquippedBulletFx();
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
 
     for (let i = 0; i < game.bullets.length; i += 1) {
       const bullet = game.bullets[i];
       if (!isWorldVisible(bullet.x, bullet.y, 80)) continue;
+
+      if (equippedFx) {
+        drawBulletTrail(bullet, equippedFx.trail, bullet.radius);
+        const size = playerBulletSpriteSize(bullet);
+        // 贴图内含黑色轮廓，使用 source-over 保留暗部；光晕已经画在贴图里。
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.save();
+        ctx.translate(bullet.x, bullet.y);
+        ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+        ctx.drawImage(equippedFx.entry.image, -size * 0.5, -size * 0.5, size, size);
+        ctx.restore();
+        ctx.globalCompositeOperation = 'lighter';
+        continue;
+      }
+
       drawBulletTrail(bullet, bullet.color, bullet.radius);
       ctx.fillStyle = '#fffbe9';
       ctx.beginPath();
