@@ -877,8 +877,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-13';
-  const BULLET_VERSION = '20261020-13';
+  const AVATAR_VERSION = '20261020-14';
+  const BULLET_VERSION = '20261020-14';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -4074,28 +4074,33 @@
     const damageScale = stageDiff
       ? stageDiff.damageScale
       : 1 + game.time / 300;
-    // 只在关卡模式的普通代牧豪身上做一次 20% 远程个体判定，绝不在每帧重掷。
-    const isFarEnemy = type === 'normal' &&
-      game.mode === 'stage' &&
-      Math.random() < stageDiff.farEnemyChance;
-    const isCharger = type === 'elite' &&
-      game.mode === 'stage' &&
-      Math.random() < stageDiff.farEnemyChance;
+    // 普通敌人一次判定：20% 冲撞精英、20% 远程射手，其余普通。
+    // 两者概率相同，且不增加总体生成数量。
+    const specialRoll = type === 'normal' && game.mode === 'stage'
+      ? Math.random()
+      : 1;
+    const isCharger = type === 'normal' && game.mode === 'stage' &&
+      specialRoll < stageDiff.farEnemyChance;
+    const isFarEnemy = type === 'normal' && game.mode === 'stage' &&
+      !isCharger && specialRoll < stageDiff.farEnemyChance * 2;
     const far = stageDiff ? stageDiff.farEnemy : STAGE_DIFFICULTY.farEnemy;
+    const chargerHpMult = isCharger ? 1.4 : 1;
+    const chargerDamageMult = isCharger ? 1.15 : 1;
 
-    const hp = def.hp * hpScale * (isElite ? rand(0.96, 1.08) : rand(0.94, 1.06));
+    const hp = def.hp * hpScale * chargerHpMult *
+      (isElite ? rand(0.96, 1.08) : rand(0.94, 1.06));
     const enemy = {
       uid: ++game.enemyUid,
-      type: type,
+      type: isCharger ? 'elite' : type,
       x: position.x,
       y: position.y,
-      r: def.radius * (isElite ? rand(0.98, 1.06) : rand(0.94, 1.04)),
+      r: def.radius * (isCharger ? 1.04 : (isElite ? rand(0.98, 1.06) : rand(0.94, 1.04))),
       hp: hp,
       maxHp: hp,
-      speed: def.speed * speedScale * (isElite ? 1.09 : 1),
-      damage: def.damage * damageScale,
-      xpValue: def.xp,
-      scoreValue: def.score,
+      speed: def.speed * speedScale * (isElite ? 1.09 : 1) * (isCharger ? 1.04 : 1),
+      damage: def.damage * damageScale * chargerDamageMult,
+      xpValue: isCharger ? ENEMY_BASE.elite.xp : def.xp,
+      scoreValue: isCharger ? ENEMY_BASE.elite.score : def.score,
       ring: isCharger ? '#ff4b4b' : isFarEnemy ? '#ffb35e' : def.ring,
       hitFlash: 0,
       attackCd: rand(0.3, 0.8),
