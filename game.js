@@ -71,6 +71,13 @@
     }
   };
 
+  const BOSS_PATTERN_SETS = {
+    desert: ['spiral', 'cross', 'zones'],
+    snow: ['spiral', 'multiRing', 'fan'],
+    grass: ['spiral', 'fan', 'multiRing'],
+    default: ['spiral', 'multiRing', 'fan']
+  };
+
   function isStageBossStage(stage) {
     return STAGE_BOSS_STAGES.indexOf(stage) !== -1;
   }
@@ -877,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-14';
-  const BULLET_VERSION = '20261020-14';
+  const AVATAR_VERSION = '20261020-15';
+  const BULLET_VERSION = '20261020-15';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -4201,6 +4208,11 @@
       damageMult: stageCfg ? stageCfg.damageMult : 1,
       cooldownMult: stageCfg ? stageCfg.cooldownMult : 1,
       countBonus: stageCfg ? stageCfg.countBonus : 0,
+      patternIndex: 0,
+      patternCd: 2.2,
+      spiral: null,
+      zones: [],
+      patternFlash: 0,
       hitFlash: 0,
       attackCd: 1,
       attackFlash: 0,
@@ -4597,6 +4609,15 @@
       boss.castFlash = 0.24;
     }
 
+    boss.patternCd -= dt;
+    boss.patternFlash = Math.max(0, (boss.patternFlash || 0) - dt);
+    if (boss.stageBoss && boss.patternCd <= 0 && boss.spawnT <= 0) {
+      startBossPattern(boss);
+      boss.patternCd = (boss.tier >= 4 ? 2.4 : 3.1) * (boss.cooldownMult || 1);
+    }
+    if (boss.spiral) updateBossSpiral(boss, dt);
+    if (boss.zones && boss.zones.length) updateBossZones(boss, dt);
+
     if (!boss.summoned && boss.hp <= boss.maxHp * 0.58) {
       boss.summoned = true;
       const count = boss.enraged ? 4 : 3;
@@ -4658,6 +4679,135 @@
     audio.play('boss_shoot');
   }
 
+  function startBossPattern(boss) {
+    const set = boss.tier >= 4
+      ? ['spiral', 'multiRing', 'cross', 'fan', 'zones']
+      : (BOSS_PATTERN_SETS[boss.theme] || BOSS_PATTERN_SETS.default);
+    const type = set[boss.patternIndex % set.length];
+    boss.patternIndex += 1;
+    boss.patternFlash = 0.35;
+    boss.castFlash = 0.3;
+    boss.patternType = type;
+    if (type === 'spiral') {
+      boss.spiral = {
+        time: boss.tier >= 4 ? 2.5 : 2.0,
+        tick: 0,
+        angle: rand(0, TAU),
+        dir: Math.random() < 0.5 ? -1 : 1,
+        arms: Math.min(5, 2 + boss.tier)
+      };
+    } else if (type === 'multiRing') {
+      const rings = boss.tier >= 3 ? 3 : 2;
+      for (let ring = 0; ring < rings; ring += 1) {
+        const count = 12 + boss.tier * 2 + (boss.countBonus || 0);
+        const offset = ring * 0.11 + rand(0, TAU * 0.02);
+        for (let i = 0; i < count; i += 1) {
+          const angle = offset + (i / count) * TAU;
+          spawnEnemyBullet(
+            boss.x + Math.cos(angle) * (boss.r * 0.72),
+            boss.y + Math.sin(angle) * (boss.r * 0.72),
+            angle,
+            (155 + ring * 38) * (boss.stageBoss ? 1 + boss.tier * 0.02 : 1),
+            7 * (boss.damageMult || 1),
+            5.2,
+            boss.themeBullet || '#ffad54'
+          );
+        }
+      }
+    } else if (type === 'cross') {
+      const base = rand(0, TAU);
+      for (let axis = 0; axis < 4; axis += 1) {
+        for (let step = -1; step <= 1; step += 1) {
+          const angle = base + axis * Math.PI * 0.5 + step * 0.08;
+          spawnEnemyBullet(
+            boss.x + Math.cos(angle) * (boss.r * 0.7),
+            boss.y + Math.sin(angle) * (boss.r * 0.7),
+            angle,
+            (260 + boss.tier * 18) * (boss.stageBoss ? 1 + boss.tier * 0.02 : 1),
+            9 * (boss.damageMult || 1),
+            5.5,
+            boss.themeBullet || '#ffad54'
+          );
+        }
+      }
+    } else if (type === 'fan') {
+      const p = game.player;
+      const aim = Math.atan2(p.y - boss.y, p.x - boss.x);
+      const count = 5 + boss.tier * 2 + (boss.countBonus || 0);
+      const spread = 0.9;
+      for (let i = 0; i < count; i += 1) {
+        const angle = aim - spread * 0.5 + (i / Math.max(1, count - 1)) * spread;
+        spawnEnemyBullet(
+          boss.x + Math.cos(angle) * (boss.r * 0.72),
+          boss.y + Math.sin(angle) * (boss.r * 0.72),
+          angle,
+          320 + boss.tier * 14,
+          9 * (boss.damageMult || 1),
+          5.5,
+          boss.themeBullet || '#ffad54'
+        );
+      }
+    } else if (type === 'zones') {
+      const p = game.player;
+      const count = Math.min(4, 2 + Math.floor(boss.tier / 2));
+      for (let i = 0; i < count; i += 1) {
+        const angle = (i / count) * TAU + rand(-0.25, 0.25);
+        const distance = i === 0 ? 0 : rand(45, 145);
+        boss.zones.push({
+          x: clamp(p.x + Math.cos(angle) * distance, 60, MAP.w - 60),
+          y: clamp(p.y + Math.sin(angle) * distance, 60, MAP.h - 60),
+          radius: 70 + boss.tier * 6,
+          time: 1.15,
+          total: 1.15
+        });
+      }
+    }
+    addRing(boss.x, boss.y, boss.r + 12, boss.themeAccent || '#ffad54', 0.4, 2);
+    audio.play('boss_shoot');
+  }
+
+  function updateBossSpiral(boss, dt) {
+    const spiral = boss.spiral;
+    if (!spiral) return;
+    spiral.time -= dt;
+    spiral.tick -= dt;
+    if (spiral.tick <= 0) {
+      spiral.tick = boss.enraged ? 0.085 : 0.11;
+      spiral.angle += (boss.enraged ? 0.2 : 0.16) * spiral.dir;
+      const arms = spiral.arms || 3;
+      for (let arm = 0; arm < arms; arm += 1) {
+        const angle = spiral.angle + (arm / arms) * TAU;
+        spawnEnemyBullet(
+          boss.x + Math.cos(angle) * (boss.r * 0.65),
+          boss.y + Math.sin(angle) * (boss.r * 0.65),
+          angle,
+          190 + boss.tier * 12,
+          6 * (boss.damageMult || 1),
+          5,
+          arm % 2 ? (boss.themeAccent || '#ffad54') : (boss.themeBullet || '#ffad54')
+        );
+      }
+    }
+    if (spiral.time <= 0) {
+      boss.spiral = null;
+      addRing(boss.x, boss.y, boss.r + 8, boss.themeAccent || '#ffad54', 0.25, 2);
+    }
+  }
+
+  function updateBossZones(boss, dt) {
+    for (let i = boss.zones.length - 1; i >= 0; i -= 1) {
+      const zone = boss.zones[i];
+      zone.time -= dt;
+      if (zone.time > 0) continue;
+      const p = game.player;
+      if (Math.hypot(p.x - zone.x, p.y - zone.y) <= zone.radius + p.r) {
+        damagePlayer(boss.damage * 0.9, zone.x, zone.y);
+      }
+      addRing(zone.x, zone.y, zone.radius, boss.themeAccent || '#ffad54', 0.45, 3);
+      boss.zones.splice(i, 1);
+    }
+  }
+
   /* =======================================================
      吴朝阳事件 Boss / 随行伙伴
      ======================================================= */
@@ -4697,8 +4847,8 @@
   function startEventBossTelegraph(boss) {
     const phase2 = boss.enraged;
     const patterns = phase2
-      ? ['spiral', 'combo', 'delayed', 'fan']
-      : ['fan', 'ring', 'delayed'];
+      ? ['rotating', 'multiRing', 'trackingFan', 'combo', 'spiral']
+      : ['fan', 'multiRing', 'trackingFan', 'rotating', 'delayed'];
     const type = patterns[boss.patternIndex % patterns.length];
     boss.patternIndex += 1;
     const p = game.player;
@@ -4708,7 +4858,10 @@
       ring: phase2 ? 0.72 : 0.9,
       delayed: phase2 ? 1.0 : 1.15,
       spiral: 0.78,
-      combo: 0.9
+      combo: 0.9,
+      rotating: phase2 ? 0.58 : 0.7,
+      multiRing: phase2 ? 0.68 : 0.82,
+      trackingFan: phase2 ? 0.62 : 0.76
     };
     const telegraph = {
       type: type,
@@ -4805,8 +4958,25 @@
       };
     } else if (type === 'combo') {
       fireEventFan(boss, telegraph.baseAngle, phase2 ? 11 : 9, 0.95, phase2 ? 290 : 280, 8);
-      fireEventRing(boss, phase2 ? 18 : 16, phase2 ? 220 : 210, 7);
-      boss.attackTimer = phase2 ? 0.82 : 1.45;
+      fireEventRing(boss, phase2 ? 20 : 16, phase2 ? 230 : 210, 7);
+      boss.attackTimer = phase2 ? 0.78 : 1.45;
+    } else if (type === 'rotating') {
+      boss.spiral = {
+        time: phase2 ? 2.25 : 1.85,
+        tick: 0,
+        angle: telegraph.baseAngle,
+        dir: Math.random() < 0.5 ? -1 : 1,
+        arms: phase2 ? 4 : 3
+      };
+      boss.attackTimer = phase2 ? 0.7 : 1.1;
+    } else if (type === 'multiRing') {
+      fireEventRing(boss, phase2 ? 20 : 16, phase2 ? 185 : 165, 8);
+      fireEventRing(boss, phase2 ? 26 : 20, phase2 ? 250 : 225, 7);
+      boss.attackTimer = phase2 ? 0.8 : 1.15;
+    } else if (type === 'trackingFan') {
+      const aim = Math.atan2(p.y - boss.y, p.x - boss.x);
+      fireEventFan(boss, aim, phase2 ? 13 : 9, phase2 ? 1.12 : 0.92, phase2 ? 300 : 270, 9);
+      boss.attackTimer = phase2 ? 0.72 : 1.1;
     }
     boss.castFlash = 0.22;
     audio.play('boss_shoot');
@@ -4820,8 +4990,9 @@
     if (spiral.tick <= 0) {
       spiral.tick = boss.enraged ? 0.08 : 0.115;
       spiral.angle += (boss.enraged ? 0.22 : 0.16) * spiral.dir;
-      for (let arm = 0; arm < 2; arm += 1) {
-        const angle = spiral.angle + arm * Math.PI;
+      const arms = spiral.arms || 2;
+      for (let arm = 0; arm < arms; arm += 1) {
+        const angle = spiral.angle + (arm / arms) * TAU;
         spawnEventBossBullet(
           boss.x + Math.cos(angle) * (boss.r + 5),
           boss.y + Math.sin(angle) * (boss.r + 5),
@@ -4829,7 +5000,7 @@
           boss.enraged ? 215 : 195,
           6,
           5.3,
-          arm === 0 ? '#c9a7ff' : '#ffad54',
+          arm % 2 === 0 ? '#c9a7ff' : '#ffad54',
           5.4
         );
       }
@@ -4884,6 +5055,9 @@
     }
 
     if (boss.telegraph) {
+      if (boss.telegraph.type === 'trackingFan') {
+        boss.telegraph.baseAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
+      }
       boss.telegraph.time -= dt;
       if (boss.telegraph.time <= 0) {
         const telegraph = boss.telegraph;
@@ -6676,6 +6850,7 @@
     drawRings();
     drawEventBossTelegraphs();
     drawChargerTelegraphs();
+    drawBossTelegraphs();
     drawRewindEcho();
     drawCharacters(now);
     drawBullets();
@@ -7421,6 +7596,33 @@
     ctx.restore();
   }
 
+  function drawBossTelegraphs() {
+    if (!game || !game.boss || game.boss.dead || !game.boss.zones) return;
+    const boss = game.boss;
+    const time = performance.now() * 0.001;
+    ctx.save();
+    for (let i = 0; i < boss.zones.length; i += 1) {
+      const zone = boss.zones[i];
+      const progress = 1 - clamp(zone.time / zone.total, 0, 1);
+      const pulse = 0.5 + Math.sin(time * 12) * 0.18;
+      ctx.globalAlpha = 0.12 + progress * 0.14;
+      ctx.fillStyle = boss.themeRage || '#ff4b4b';
+      ctx.beginPath();
+      ctx.arc(zone.x, zone.y, zone.radius, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.5 + progress * 0.4;
+      ctx.strokeStyle = boss.themeAccent || '#ffcf66';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(zone.x, zone.y, zone.radius * pulse, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(zone.x, zone.y, zone.radius, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawChargerTelegraphs() {
     if (!game || !game.enemies) return;
     const time = performance.now() * 0.001;
@@ -7475,7 +7677,7 @@
       const pulse = 0.55 + Math.sin(time * 14) * 0.2;
       const base = telegraph.baseAngle;
 
-      if (telegraph.type === 'fan' || telegraph.type === 'combo') {
+      if (telegraph.type === 'fan' || telegraph.type === 'combo' || telegraph.type === 'trackingFan') {
         const half = boss.enraged ? 0.48 : 0.4;
         ctx.fillStyle = 'rgba(255, 91, 116, ' + (0.035 + progress * 0.05) + ')';
         ctx.beginPath();
@@ -7498,19 +7700,38 @@
         ctx.globalAlpha = 1;
       }
 
-      if (telegraph.type === 'ring' || telegraph.type === 'combo') {
-        const radius = boss.r + 18 + progress * 92;
-        ctx.strokeStyle = 'rgba(255, 207, 102, ' + (0.24 + progress * 0.34) + ')';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 8]);
-        ctx.beginPath();
-        ctx.arc(boss.x, boss.y, radius, 0, TAU);
-        ctx.stroke();
+      if (telegraph.type === 'ring' || telegraph.type === 'combo' || telegraph.type === 'multiRing') {
+        const ringCount = telegraph.type === 'multiRing' ? 2 : 1;
+        for (let ring = 0; ring < ringCount; ring += 1) {
+          const radius = boss.r + 18 + ring * 24 + progress * 92;
+          ctx.strokeStyle = ring === 0
+            ? 'rgba(255, 207, 102, ' + (0.24 + progress * 0.34) + ')'
+            : 'rgba(120, 222, 255, ' + (0.2 + progress * 0.28) + ')';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([8, 8]);
+          ctx.beginPath();
+          ctx.arc(boss.x, boss.y, radius, 0, TAU);
+          ctx.stroke();
+        }
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.arc(boss.x, boss.y, boss.r + 8, 0, TAU);
         ctx.strokeStyle = 'rgba(255, 132, 148, 0.3)';
         ctx.stroke();
+      }
+
+      if (telegraph.type === 'rotating') {
+        ctx.globalAlpha = 0.28 + progress * 0.25;
+        ctx.strokeStyle = '#ffcf66';
+        ctx.lineWidth = 2;
+        for (let arm = 0; arm < 4; arm += 1) {
+          const angle = base + arm * Math.PI * 0.5 + progress * 3.2;
+          ctx.beginPath();
+          ctx.moveTo(boss.x, boss.y);
+          ctx.lineTo(boss.x + Math.cos(angle) * 230, boss.y + Math.sin(angle) * 230);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
       }
 
       if (telegraph.type === 'delayed') {
