@@ -26,7 +26,8 @@
     UPGRADE: 'upgrade',
     EVENT: 'event',
     DYING: 'dying',
-    GAMEOVER: 'gameover'
+    GAMEOVER: 'gameover',
+    VICTORY: 'victory'
   });
 
   const MODE_LABEL = {
@@ -175,6 +176,82 @@
       ring: '#ff4f6d'
     }
   };
+
+  // 关卡模式最终关与难度曲线集中配置。无限模式不读取这里的成长参数。
+  const STAGE_DIFFICULTY = Object.freeze({
+    maxStage: 20,
+    hpPerStage: 0.13,
+    hpCap: 3.8,
+    speedPerStage: 0.0075,
+    speedCap: 0.16,
+    damagePerStage: 0.018,
+    damageCap: 0.4,
+    maxAliveBase: 9,
+    maxAlivePerStage: 1.32,
+    maxAliveCap: 34,
+    spawnIntervalBase: 1.08,
+    spawnIntervalPerStage: 0.027,
+    spawnIntervalMin: 0.55,
+    eliteChanceBase: 0.03,
+    eliteChancePerStage: 0.012,
+    eliteChanceCap: 0.26,
+    farEnemyChance: 0.2,
+    farEnemy: Object.freeze({
+      preferredMin: 220,
+      preferredMax: 360,
+      retreatDistance: 150,
+      advanceDistance: 430,
+      speedBase: 225,
+      speedPerStage: 2.2,
+      speedCap: 270,
+      damageBase: 6,
+      damagePerStage: 0.25,
+      damageCap: 12,
+      intervalBase: 2.9,
+      intervalPerStage: 0.05,
+      intervalMin: 1.85,
+      windup: 0.42,
+      bulletRadius: 5.4,
+      bulletLife: 4.8,
+      bulletLimit: 190
+    }),
+    bossHpCap: 9000
+  });
+
+  function normalizedStage(stage) {
+    const value = Math.floor(Number(stage) || 1);
+    return clamp(value, 1, STAGE_DIFFICULTY.maxStage);
+  }
+
+  function stageDifficulty(stage) {
+    const level = normalizedStage(stage);
+    const steps = level - 1;
+    const far = STAGE_DIFFICULTY.farEnemy;
+    return {
+      stage: level,
+      hpScale: Math.min(STAGE_DIFFICULTY.hpCap, 1 + STAGE_DIFFICULTY.hpPerStage * steps),
+      speedScale: 1 + Math.min(STAGE_DIFFICULTY.speedCap, STAGE_DIFFICULTY.speedPerStage * steps),
+      damageScale: 1 + Math.min(STAGE_DIFFICULTY.damageCap, STAGE_DIFFICULTY.damagePerStage * steps),
+      maxAlive: Math.min(
+        STAGE_DIFFICULTY.maxAliveCap,
+        Math.floor(STAGE_DIFFICULTY.maxAliveBase + STAGE_DIFFICULTY.maxAlivePerStage * steps)
+      ),
+      spawnInterval: Math.max(
+        STAGE_DIFFICULTY.spawnIntervalMin,
+        STAGE_DIFFICULTY.spawnIntervalBase - STAGE_DIFFICULTY.spawnIntervalPerStage * steps
+      ),
+      eliteChance: Math.min(
+        STAGE_DIFFICULTY.eliteChanceCap,
+        STAGE_DIFFICULTY.eliteChanceBase + STAGE_DIFFICULTY.eliteChancePerStage * steps
+      ),
+      farEnemyChance: STAGE_DIFFICULTY.farEnemyChance,
+      farEnemy: {
+        speed: Math.min(far.speedCap, far.speedBase + far.speedPerStage * steps),
+        damage: Math.min(far.damageCap, far.damageBase + far.damagePerStage * steps),
+        interval: Math.max(far.intervalMin, far.intervalBase - far.intervalPerStage * steps)
+      }
+    };
+  }
 
   /* =======================================================
      皮肤配置（价格、图片、显示信息集中管理）
@@ -469,6 +546,7 @@
         shoot_smg: 30,
         shoot_shotgun: 64,
         boss_shoot: 110,
+        enemy_shot: 90,
         explosion: 70,
         ui: 40
       };
@@ -676,6 +754,15 @@
             this.tone(freq, freq, 0.24, 'triangle', 0.055, index * 0.09);
           });
           break;
+        case 'victory':
+          [392, 523.25, 659.25, 783.99, 1046.5, 1318.51].forEach((freq, index) => {
+            this.tone(freq, freq * 1.01, 0.3, 'triangle', 0.055, index * 0.1);
+          });
+          this.tone(1568, 2093, 0.6, 'sine', 0.035, 0.6);
+          break;
+        case 'enemy_shot':
+          this.tone(230, 120, 0.08, 'square', 0.026);
+          break;
         case 'purchase':
           this.tone(523.25, 523.25, 0.11, 'triangle', 0.05);
           this.tone(659.25, 659.25, 0.11, 'triangle', 0.05, 0.08);
@@ -714,8 +801,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-3';
-  const BULLET_VERSION = '20261020-3';
+  const AVATAR_VERSION = '20261020-4';
+  const BULLET_VERSION = '20261020-4';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1153,6 +1240,15 @@
     resultStageWrap: $('resultStageWrap'),
     resultStage: $('resultStage'),
     gameOverBest: $('gameOverBest'),
+    victoryStage: $('victoryStage'),
+    victoryKills: $('victoryKills'),
+    victoryCoins: $('victoryCoins'),
+    victoryTime: $('victoryTime'),
+    victoryScore: $('victoryScore'),
+    victoryBest: $('victoryBest'),
+    victoryRecordBadge: $('victoryRecordBadge'),
+    victoryRestartBtn: $('victoryRestartBtn'),
+    victoryMenuBtn: $('victoryMenuBtn'),
     restartBtn: $('restartBtn'),
     gameOverMenuBtn: $('gameOverMenuBtn'),
     bestScore: $('bestScore'),
@@ -1213,7 +1309,8 @@
     shop: $('shopScreen'),
     inventory: $('inventoryScreen'),
     event: $('eventScreen'),
-    eventReward: $('eventRewardScreen')
+    eventReward: $('eventRewardScreen'),
+    victory: $('victoryScreen')
   };
 
   const view = {
@@ -1295,7 +1392,8 @@
       nextState === S.PAUSED ||
       nextState === S.UPGRADE ||
       nextState === S.EVENT ||
-      nextState === S.DYING
+      nextState === S.DYING ||
+      nextState === S.VICTORY
     );
   }
 
@@ -2484,7 +2582,9 @@
       gameOverShown: false,
       statsCommitted: false,
       finalScore: 0,
-      newRecord: false
+      newRecord: false,
+      coinsEarnedRun: 0,
+      victoryShown: false
     };
     if (save.wuchaoyangCompanionUnlocked) {
       g.companion = createCompanion(g.player);
@@ -3062,14 +3162,24 @@
     const def = ENEMY_BASE[type] || ENEMY_BASE.normal;
     const isElite = type === 'elite';
     const position = findSpawnPosition(opts.distance);
-
+    const stageDiff = game.mode === 'stage' ? stageDifficulty(game.stage) : null;
     const survivalScale = game.mode === 'survival'
       ? 1 + game.time / 90 + Math.pow(game.time / 210, 1.45)
-      : 1 + (game.stage - 1) * 0.235;
-    const speedScale = 1 + Math.min(0.55, game.time / 260 + (game.mode === 'stage' ? (game.stage - 1) * 0.022 : 0));
-    const damageScale = 1 + game.time / 300 + (game.mode === 'stage' ? (game.stage - 1) * 0.045 : 0);
+      : null;
+    const hpScale = stageDiff ? stageDiff.hpScale : survivalScale;
+    const speedScale = stageDiff
+      ? stageDiff.speedScale
+      : 1 + Math.min(0.55, game.time / 260);
+    const damageScale = stageDiff
+      ? stageDiff.damageScale
+      : 1 + game.time / 300;
+    // 只在关卡模式的普通代牧豪身上做一次 20% 远程个体判定，绝不在每帧重掷。
+    const isFarEnemy = type === 'normal' &&
+      game.mode === 'stage' &&
+      Math.random() < stageDiff.farEnemyChance;
+    const far = stageDiff ? stageDiff.farEnemy : STAGE_DIFFICULTY.farEnemy;
 
-    const hp = def.hp * survivalScale * (isElite ? rand(0.96, 1.08) : rand(0.94, 1.06));
+    const hp = def.hp * hpScale * (isElite ? rand(0.96, 1.08) : rand(0.94, 1.06));
     const enemy = {
       uid: ++game.enemyUid,
       type: type,
@@ -3082,9 +3192,10 @@
       damage: def.damage * damageScale,
       xpValue: def.xp,
       scoreValue: def.score,
-      ring: def.ring,
+      ring: isFarEnemy ? '#ffb35e' : def.ring,
       hitFlash: 0,
       attackCd: rand(0.3, 0.8),
+      attackFlash: 0,
       spawnT: 0.34,
       lungeCd: rand(1.6, 4),
       lungeTime: 0,
@@ -3101,11 +3212,25 @@
       summoned: false,
       castFlash: 0,
       strafeDir: Math.random() < 0.5 ? -1 : 1,
-      strafeTimer: rand(1.8, 3.5)
+      strafeTimer: rand(1.8, 3.5),
+      ranged: isFarEnemy,
+      variant: isFarEnemy ? 'ranged' : null,
+      shootCd: isFarEnemy ? rand(0.9, 1.8) : 0,
+      shootWindup: 0,
+      shotsFired: 0,
+      aimAngle: 0,
+      preferredRange: isFarEnemy
+        ? rand(STAGE_DIFFICULTY.farEnemy.preferredMin, STAGE_DIFFICULTY.farEnemy.preferredMax)
+        : 0,
+      fireInterval: isFarEnemy
+        ? far.interval + rand(0.15, 0.55)
+        : 0,
+      rangedSpeed: isFarEnemy ? far.speed : 0,
+      rangedDamage: isFarEnemy ? far.damage : 0
     };
 
     game.enemies.push(enemy);
-    addRing(position.x, position.y, 22, def.ring, 0.55, 2);
+    addRing(position.x, position.y, 22, enemy.ring, 0.55, 2);
     if (!opts.silent) {
       for (let i = 0; i < 7; i += 1) {
         spawnParticle(
@@ -3115,7 +3240,7 @@
           rand(-45, 45),
           rand(0.2, 0.45),
           rand(2, 5),
-          def.ring,
+          enemy.ring,
           true
         );
       }
@@ -3128,7 +3253,10 @@
     const def = ENEMY_BASE.boss;
     const position = findSpawnPosition(Math.min(view.w, view.h) * 0.78 + 160);
     const survivalHp = 1200 + game.time * 12;
-    const stageHp = 1400 + (game.stage - 1) * 560 + game.time * 4;
+    const stageHp = Math.min(
+      STAGE_DIFFICULTY.bossHpCap,
+      1500 + (game.stage - 1) * 500
+    );
     const hp = game.mode === 'stage' ? stageHp : survivalHp;
 
     const boss = {
@@ -3147,6 +3275,7 @@
       ring: def.ring,
       hitFlash: 0,
       attackCd: 1,
+      attackFlash: 0,
       spawnT: 0.6,
       lungeCd: 2,
       lungeTime: 0,
@@ -3226,15 +3355,18 @@
     }
 
     if (g.stageState !== 'fighting') return;
+    const difficulty = stageDifficulty(g.stage);
     g.spawnTimer -= dt;
     if (g.spawnTimer <= 0) {
       const alive = countLivingEnemies();
-      const maxAlive = Math.min(44, 9 + g.stage * 2);
+      const maxAlive = Math.min(
+        STAGE_DIFFICULTY.maxAliveCap,
+        Math.max(1, difficulty.maxAlive)
+      );
       if (alive < maxAlive) {
-        const eliteChance = Math.min(0.42, 0.02 + g.stage * 0.035);
-        spawnEnemy(Math.random() < eliteChance ? 'elite' : 'normal');
+        spawnEnemy(Math.random() < difficulty.eliteChance ? 'elite' : 'normal');
       }
-      g.spawnTimer = Math.max(0.42, 1.08 - g.stage * 0.035) * rand(0.82, 1.18);
+      g.spawnTimer = difficulty.spawnInterval * rand(0.86, 1.14);
     }
   }
 
@@ -3248,6 +3380,7 @@
       enemy.hitFlash = Math.max(0, enemy.hitFlash - dt);
       enemy.spawnT = Math.max(0, enemy.spawnT - dt);
       enemy.attackCd = Math.max(0, enemy.attackCd - dt);
+      enemy.attackFlash = Math.max(0, enemy.attackFlash - dt);
       enemy.castFlash = Math.max(0, enemy.castFlash - dt);
 
       if (enemy.spawnT > 0.12) {
@@ -3268,12 +3401,91 @@
       const contactDistance = enemy.r + p.r - 3;
       if (dist < contactDistance && enemy.attackCd <= 0) {
         enemy.attackCd = enemy.type === 'boss' ? 1.05 : 0.86;
+        enemy.attackFlash = 0.24;
+        addRing(
+          enemy.x,
+          enemy.y,
+          enemy.r + 8,
+          enemy.ranged ? '#ffb35e' : '#ff6b7d',
+          0.24,
+          2
+        );
         damagePlayer(enemy.damage, enemy.x, enemy.y);
         if (p.dead) break;
       }
     }
 
     separateEnemies();
+  }
+
+  function updateRangedEnemy(enemy, dt, dist, directionX, directionY) {
+    const p = game.player;
+    const far = STAGE_DIFFICULTY.farEnemy;
+    let speed = enemy.speed * 0.82;
+    let moveX = 0;
+    let moveY = 0;
+
+    if (dist < far.retreatDistance) {
+      // 被贴脸时优先后撤，给远程个体重新拉开距离的机会。
+      moveX = -directionX;
+      moveY = -directionY;
+    } else if (dist > far.advanceDistance) {
+      moveX = directionX;
+      moveY = directionY;
+    } else if (dist < enemy.preferredRange - 55) {
+      moveX = -directionX;
+      moveY = -directionY;
+    } else if (dist > enemy.preferredRange + 55) {
+      moveX = directionX;
+      moveY = directionY;
+    } else {
+      enemy.strafeTimer -= dt;
+      if (enemy.strafeTimer <= 0) {
+        enemy.strafeTimer = rand(1.3, 2.8);
+        enemy.strafeDir *= -1;
+      }
+      moveX = -directionY * enemy.strafeDir * 0.82 + directionX * 0.12;
+      moveY = directionX * enemy.strafeDir * 0.82 + directionY * 0.12;
+    }
+
+    enemy.x += (moveX * speed + enemy.pushX) * dt;
+    enemy.y += (moveY * speed + enemy.pushY) * dt;
+    enemy.pushX *= Math.exp(-dt * 8);
+    enemy.pushY *= Math.exp(-dt * 8);
+    clampToMap(enemy);
+
+    if (enemy.shootWindup > 0) {
+      enemy.shootWindup -= dt;
+      if (enemy.shootWindup <= 0) {
+        const muzzleX = enemy.x + Math.cos(enemy.aimAngle) * (enemy.r + 8);
+        const muzzleY = enemy.y + Math.sin(enemy.aimAngle) * (enemy.r + 8);
+        spawnEnemyBullet(
+          muzzleX,
+          muzzleY,
+          enemy.aimAngle,
+          enemy.rangedSpeed,
+          enemy.rangedDamage,
+          far.bulletRadius,
+          '#ffb35e',
+          { life: far.bulletLife, ranged: true }
+        );
+        enemy.shootCd = enemy.fireInterval + rand(0.18, 0.55);
+        enemy.shotsFired += 1;
+        enemy.castFlash = 0.18;
+        addRing(muzzleX, muzzleY, enemy.r + 5, '#ffb35e', 0.22, 2);
+        audio.play('enemy_shot');
+      }
+      return;
+    }
+
+    enemy.shootCd -= dt;
+    if (enemy.shootCd <= 0 &&
+        dist < 620 &&
+        game.enemyBullets.length < far.bulletLimit) {
+      enemy.shootWindup = far.windup;
+      enemy.aimAngle = Math.atan2(p.y - enemy.y, p.x - enemy.x);
+      enemy.castFlash = 0.34;
+    }
   }
 
   function updateRegularEnemy(enemy, dt) {
@@ -3283,6 +3495,11 @@
     const dist = Math.max(0.001, Math.hypot(dx, dy));
     const directionX = dx / dist;
     const directionY = dy / dist;
+
+    if (enemy.ranged) {
+      updateRangedEnemy(enemy, dt, dist, directionX, directionY);
+      return;
+    }
 
     let speed = enemy.speed;
     enemy.wobble += dt * 2.6;
@@ -3298,13 +3515,17 @@
       }
     }
 
-    const wobble = Math.sin(enemy.wobble + enemy.uid * 0.7) * (enemy.type === 'elite' ? 0.15 : 0.22);
-    let moveX = directionX;
-    let moveY = directionY;
-    if (dist < 70) {
-      moveX = -directionX * 0.4;
-      moveY = -directionY * 0.4;
-    } else {
+    // 进入接触攻击距离后停止往玩家身体里挤，真正的伤害由 updateEnemies
+    // 的统一近战判定执行。旧代码在 70px 处主动后退，导致 45px 左右的
+    // 近战距离永远到不了，这是近战不攻击的根因。
+    const attackDistance = enemy.r + p.r - 3;
+    let moveX = 0;
+    let moveY = 0;
+    if (dist > attackDistance - 2) {
+      const wobbleAmp = dist < attackDistance + 45
+        ? 0.08
+        : (enemy.type === 'elite' ? 0.15 : 0.22);
+      const wobble = Math.sin(enemy.wobble + enemy.uid * 0.7) * wobbleAmp;
       const cs = Math.cos(wobble);
       const sn = Math.sin(wobble);
       moveX = directionX * cs - directionY * sn;
@@ -3711,6 +3932,7 @@
     game.eventBossSpiral = null;
     game.enemyBullets = [];
     game.companionBullets = [];
+    game.kills += 1;
     game.player.invuln = Math.max(game.player.invuln, 2);
 
     addShake(24);
@@ -3738,6 +3960,7 @@
     if (firstClear) {
       coins = WUCHAOYANG_EVENT.reward.coins;
       save.coins += coins;
+      game.coinsEarnedRun += coins;
       save.wuchaoyangBossRewardClaimed = true;
       refreshWalletDisplays();
     }
@@ -3873,8 +4096,9 @@
     });
   }
 
-  function spawnEnemyBullet(x, y, angle, speed, damage, radius, color) {
+  function spawnEnemyBullet(x, y, angle, speed, damage, radius, color, options) {
     if (!game) return;
+    const opts = options || {};
     if (game.enemyBullets.length >= MAX_ENEMY_BULLETS) game.enemyBullets.shift();
     game.enemyBullets.push({
       x: x,
@@ -3883,9 +4107,10 @@
       vy: Math.sin(angle) * speed,
       damage: damage,
       radius: radius,
-      life: 5.2,
+      life: opts.life || 5.2,
       color: color,
       dead: false,
+      ranged: !!opts.ranged,
       trail: [{ x: x, y: y }]
     });
   }
@@ -4065,10 +4290,16 @@
       audio.play('stage');
       spawnBoss('stage');
     } else {
+      const finalStage = game.stage >= STAGE_DIFFICULTY.maxStage;
       game.stageState = 'transition';
       game.stageTransition = 1.8;
       game.score += 160 + game.stage * 45;
-      setBanner('目标完成', '即将进入第 ' + (game.stage + 1) + ' 关', 'stage', 1.8);
+      setBanner(
+        finalStage ? '最终目标完成' : '目标完成',
+        finalStage ? '恭喜，即将完成全部 ' + STAGE_DIFFICULTY.maxStage + ' 关' : '即将进入第 ' + (game.stage + 1) + ' 关',
+        finalStage ? 'reward' : 'stage',
+        1.8
+      );
       audio.play('stage');
     }
   }
@@ -4081,6 +4312,7 @@
     const reward = stageClearCoinReward(completedStage);
     game.lastRewardedStage = completedStage;
     save.coins += reward;
+    game.coinsEarnedRun += reward;
     persistSave();
     refreshWalletDisplays();
     game.coinReward = {
@@ -4094,9 +4326,14 @@
   }
 
   function advanceStage() {
-    if (!game || game.mode !== 'stage') return;
+    if (!game || game.mode !== 'stage' || game.victoryShown) return;
     const completedStage = game.stage;
     awardStageClearCoins(completedStage);
+
+    if (completedStage >= STAGE_DIFFICULTY.maxStage) {
+      showVictory();
+      return;
+    }
 
     game.stage += 1;
     game.stageKills = 0;
@@ -4222,6 +4459,59 @@
         true
       );
     }
+  }
+
+  function showVictory() {
+    if (!game || game.mode !== 'stage' || game.victoryShown) return;
+    game.victoryShown = true;
+    game.stageState = 'cleared';
+    game.banner = null;
+    game.coinReward = null;
+    game.finalScore = Math.max(0, Math.floor(game.score));
+
+    const previousHigh = save.highScore;
+    const oldMaxTime = save.maxTime;
+    const oldMaxLevel = save.maxLevel;
+    const newHigh = game.finalScore > previousHigh;
+    const newTime = Math.floor(game.time) > oldMaxTime;
+    const newLevel = game.level > oldMaxLevel;
+
+    if (!game.statsCommitted) {
+      game.statsCommitted = true;
+      save.highScore = Math.max(save.highScore, game.finalScore);
+      save.maxTime = Math.max(save.maxTime, Math.floor(game.time));
+      save.maxLevel = Math.max(save.maxLevel, game.level);
+      save.totalKills += game.kills;
+      save.highestStage = Math.max(save.highestStage || 0, STAGE_DIFFICULTY.maxStage);
+      persistSave();
+    }
+
+    setState(S.VICTORY);
+    hideScreens();
+    clearInput();
+    showScreen('victory');
+    el.victoryStage.textContent = String(STAGE_DIFFICULTY.maxStage);
+    el.victoryKills.textContent = formatNumber(game.kills);
+    el.victoryCoins.textContent = formatNumber(game.coinsEarnedRun);
+    el.victoryTime.textContent = formatTime(game.time);
+    el.victoryScore.textContent = formatNumber(game.finalScore);
+    el.victoryBest.textContent = '历史最高分：' + formatNumber(save.highScore);
+    el.victoryRecordBadge.hidden = !(newHigh || newTime || newLevel);
+    if (newHigh) {
+      el.victoryRecordBadge.textContent = '★ 新纪录 · 最高分';
+    } else if (newTime) {
+      el.victoryRecordBadge.textContent = '★ 新纪录 · 最长存活';
+    } else if (newLevel) {
+      el.victoryRecordBadge.textContent = '★ 新纪录 · 最高等级';
+    }
+    updateMenuStats();
+    audio.play('victory');
+    lastFrameTime = performance.now();
+    window.setTimeout(function () {
+      if (state === S.VICTORY && el.victoryRestartBtn) {
+        el.victoryRestartBtn.focus({ preventScroll: true });
+      }
+    }, 100);
   }
 
   function showGameOver() {
@@ -5562,6 +5852,36 @@
     ctx.ellipse(enemy.x, enemy.y + enemy.r * 0.72, enemy.r * 0.92, enemy.r * 0.38, 0, 0, TAU);
     ctx.fill();
 
+    const isRanged = enemy.variant === 'ranged';
+    if (isRanged) {
+      const farAura = ctx.createRadialGradient(
+        enemy.x,
+        enemy.y,
+        enemy.r * 0.35,
+        enemy.x,
+        enemy.y,
+        enemy.r * 1.9
+      );
+      farAura.addColorStop(0, 'rgba(255, 179, 94, 0.2)');
+      farAura.addColorStop(1, 'rgba(255, 179, 94, 0)');
+      ctx.fillStyle = farAura;
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, enemy.r * 1.9, 0, TAU);
+      ctx.fill();
+
+      ctx.save();
+      ctx.translate(enemy.x, enemy.y);
+      ctx.rotate(time * 0.9);
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(255, 179, 94, 0.66)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, enemy.r + 9, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     if (enemy.type === 'boss') {
       const aura = ctx.createRadialGradient(enemy.x, enemy.y, enemy.r * 0.42, enemy.x, enemy.y, enemy.r * 2.15);
       aura.addColorStop(0, enemy.enraged ? 'rgba(255,53,91,0.23)' : 'rgba(255,79,109,0.14)');
@@ -5608,9 +5928,9 @@
       radius,
       enemy.type === 'boss'
         ? (enemy.enraged ? '#ff5a3c' : '#ff4f6d')
-        : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
+        : isRanged ? '#ffb35e' : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
       {
-        ringWidth: enemy.type === 'boss' ? 3.5 : enemy.type === 'elite' ? 2.4 : 1.8,
+        ringWidth: enemy.type === 'boss' ? 3.5 : (isRanged || enemy.type === 'elite') ? 2.4 : 1.8,
         dashed: enemy.type === 'elite'
       }
     );
@@ -5635,6 +5955,37 @@
       ctx.globalAlpha = 1;
     }
 
+    if (enemy.attackFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = clamp(enemy.attackFlash * 4.2, 0, 0.85);
+      ctx.strokeStyle = isRanged ? '#ffb35e' : '#ff6b7d';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, radius + 11, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (isRanged && enemy.shootWindup > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + Math.sin(time * 18) * 0.12;
+      ctx.strokeStyle = '#ffb35e';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 6]);
+      ctx.beginPath();
+      ctx.moveTo(
+        enemy.x + Math.cos(enemy.aimAngle) * (enemy.r + 4),
+        enemy.y + Math.sin(enemy.aimAngle) * (enemy.r + 4)
+      );
+      ctx.lineTo(
+        enemy.x + Math.cos(enemy.aimAngle) * (enemy.r + 240),
+        enemy.y + Math.sin(enemy.aimAngle) * (enemy.r + 240)
+      );
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     if (enemy.type !== 'boss') {
       const hpRatio = clamp(enemy.hp / enemy.maxHp, 0, 1);
       if (hpRatio < 0.999 || enemy.type === 'elite') {
@@ -5656,6 +6007,14 @@
         ctx.textAlign = 'center';
         ctx.fillStyle = '#ffcf66';
         ctx.fillText('ELITE', enemy.x, enemy.y - radius - 19);
+        ctx.globalAlpha = 1;
+      }
+      if (isRanged) {
+        ctx.globalAlpha = 0.95;
+        setMonoFont(7.5, 800);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffb35e';
+        ctx.fillText('◈ 远程', enemy.x, enemy.y - radius - 19);
         ctx.globalAlpha = 1;
       }
     }
@@ -6914,6 +7273,8 @@
     el.pauseMenuBtn.addEventListener('click', returnToMenu);
     el.restartBtn.addEventListener('click', restartGame);
     el.gameOverMenuBtn.addEventListener('click', returnToMenu);
+    if (el.victoryRestartBtn) el.victoryRestartBtn.addEventListener('click', restartGame);
+    if (el.victoryMenuBtn) el.victoryMenuBtn.addEventListener('click', returnToMenu);
 
     if (el.menuShopBtn) el.menuShopBtn.addEventListener('click', function () { openStore('shop', 'menu'); });
     if (el.menuInventoryBtn) el.menuInventoryBtn.addEventListener('click', function () { openStore('inventory', 'menu'); });

@@ -2706,6 +2706,204 @@ body.touch[data-state="playing"] .touch-controls {
 }
 
 /* =========================================================
+   最终通关
+   ========================================================= */
+
+.victory-screen {
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(70px, calc(env(safe-area-inset-top) + 54px))
+    max(20px, env(safe-area-inset-right))
+    max(30px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 207, 102, 0.16), transparent 34%),
+    radial-gradient(circle at 22% 80%, rgba(93, 225, 255, 0.1), transparent 38%),
+    rgba(3, 7, 12, 0.92);
+  -webkit-backdrop-filter: blur(14px) saturate(0.9);
+  backdrop-filter: blur(14px) saturate(0.9);
+}
+
+.victory-panel {
+  width: min(900px, 100%);
+  padding: 30px 34px 28px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 207, 102, 0.32);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 207, 102, 0.16), transparent 34%),
+    linear-gradient(145deg, rgba(19, 28, 41, 0.98), rgba(7, 12, 20, 0.99));
+  box-shadow: 0 38px 100px rgba(0, 0, 0, 0.6), 0 0 80px rgba(255, 207, 102, 0.08);
+  text-align: center;
+}
+
+.victory-panel .eyebrow {
+  justify-content: center;
+  color: var(--gold);
+}
+
+.victory-emblem {
+  display: grid;
+  width: 86px;
+  height: 86px;
+  margin: 10px auto 4px;
+  place-items: center;
+  border: 1px solid rgba(255, 207, 102, 0.56);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 30%, rgba(255, 247, 206, 0.22), transparent 35%),
+    rgba(255, 207, 102, 0.07);
+  box-shadow: 0 0 35px rgba(255, 207, 102, 0.16), inset 0 0 22px rgba(255, 207, 102, 0.08);
+}
+
+.victory-emblem span {
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 38px;
+  font-weight: 900;
+  letter-spacing: -0.08em;
+  line-height: 1;
+}
+
+.victory-panel h2 {
+  margin: 1px 0 7px;
+  color: #fff6e6;
+  font-size: clamp(42px, 6vw, 66px);
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-shadow: 0 0 36px rgba(255, 207, 102, 0.14);
+}
+
+.victory-subtitle {
+  margin: 0 auto 16px;
+  color: #9fb1bf;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.victory-record-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 207, 102, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 207, 102, 0.07);
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.victory-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 0 auto;
+  border: 1px solid rgba(255, 207, 102, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 207, 102, 0.1);
+}
+
+.victory-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 10px;
+  background: rgba(8, 15, 23, 0.9);
+}
+
+.victory-stats span {
+  color: #7b8fa1;
+  font-size: 9px;
+}
+
+.victory-stats strong {
+  color: #f4ead6;
+  font-family: var(--font-mono);
+  font-size: clamp(17px, 2.2vw, 25px);
+  font-weight: 850;
+  line-height: 1;
+}
+
+.victory-stats > div:nth-child(3) strong {
+  color: var(--gold);
+}
+
+.victory-best {
+  margin: 14px 0 0;
+  color: #72889a;
+  font-size: 10px;
+}
+
+.victory-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.victory-actions .btn {
+  min-width: 172px;
+}
+
+.victory-quote {
+  margin: 19px 0 0;
+  color: #536a7a;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 820px) {
+  .victory-screen {
+    align-items: flex-start;
+    padding-top: max(66px, calc(env(safe-area-inset-top) + 52px));
+  }
+
+  .victory-panel {
+    padding: 24px 18px 22px;
+  }
+
+  .victory-emblem {
+    width: 68px;
+    height: 68px;
+  }
+
+  .victory-emblem span {
+    font-size: 30px;
+  }
+
+  .victory-panel h2 {
+    font-size: 48px;
+  }
+
+  .victory-subtitle {
+    font-size: 11px;
+  }
+
+  .victory-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .victory-stats > div:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .victory-actions {
+    flex-direction: column;
+  }
+
+  .victory-actions .btn {
+    width: 100%;
+  }
+}
+
+/* =========================================================
    随机事件：吴朝阳的抉择
    ========================================================= */
 
