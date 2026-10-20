@@ -37,15 +37,15 @@
   <link id="canonicalLink" rel="canonical" href="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/">
   <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="preload" as="image" href="assets/skins/edg.png?v=20261020-12" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/enemy.png?v=20261020-12" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/bullets/edg2026-pomegranate.png?v=20261020-12">
-  <link rel="preload" as="image" href="assets/bullets/korean-kimchi.png?v=20261020-12">
-  <link rel="preload" as="image" href="assets/bullets/bride-flower.png?v=20261020-12">
-  <link rel="preload" as="image" href="assets/bullets/nun-black-sword.png?v=20261020-12">
-  <link rel="preload" as="image" href="assets/events/wuchaoyang-portrait.jpg?v=20261020-12">
-  <link rel="preload" as="image" href="assets/events/wuchaoyang-avatar.jpg?v=20261020-12">
-  <link rel="stylesheet" href="style.css?v=20261020-12">
+  <link rel="preload" as="image" href="assets/skins/edg.png?v=20261020-13" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/enemy.png?v=20261020-13" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/bullets/edg2026-pomegranate.png?v=20261020-13">
+  <link rel="preload" as="image" href="assets/bullets/korean-kimchi.png?v=20261020-13">
+  <link rel="preload" as="image" href="assets/bullets/bride-flower.png?v=20261020-13">
+  <link rel="preload" as="image" href="assets/bullets/nun-black-sword.png?v=20261020-13">
+  <link rel="preload" as="image" href="assets/events/wuchaoyang-portrait.jpg?v=20261020-13">
+  <link rel="preload" as="image" href="assets/events/wuchaoyang-avatar.jpg?v=20261020-13">
+  <link rel="stylesheet" href="style.css?v=20261020-13">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b1119' stroke='%235de1ff' stroke-width='4'/%3E%3Ccircle cx='32' cy='24' r='10' fill='%235de1ff'/%3E%3Cpath d='M14 55c2-13 9-19 18-19s16 6 18 19' fill='%235de1ff'/%3E%3C/svg%3E">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
@@ -115,7 +115,7 @@
         <p>你只是想安静地活下去，可你的好兄弟不这么想。拿好枪，升级火力，别被追上。</p>
         <p>本游戏使用 HTML5 Canvas 原生开发，无需下载客户端，支持电脑和手机浏览器。游戏包含无限生存与关卡挑战两种模式，手枪、冲锋枪、霰弹枪、狙击枪和火箭筒五种枪械，普通敌人、精英敌人与拥有特殊攻击模式的 BOSS。</p>
         <h3>操作方式</h3>
-        <p>电脑端：WASD 移动，鼠标瞄准，左键射击，R 换弹，Q/E 释放形态技能，空格释放已实装形态的终极技能，Shift 冲刺，Tab 查看属性，数字键 1–5 切换枪械，ESC 暂停。手机端：左侧摇杆移动，右侧摇杆瞄准，并使用开火、换弹、冲刺、切枪和屏幕底部横向技能按钮。</p>
+        <p>电脑端：WASD 移动，鼠标瞄准，左键射击，R 换弹，Q/E 释放形态技能，空格释放已实装形态的终极技能，F 闪避，Tab 查看属性，数字键 1–5 切换枪械，ESC 暂停。手机端：左侧摇杆移动，右侧摇杆瞄准，并使用开火、换弹、冲刺、切枪和屏幕底部横向技能按钮。</p>
         <p>请启用 JavaScript 后开始游戏。</p>
       </div>
     </div>
@@ -133,21 +133,21 @@
   <!-- 底部技能栏：桌面与手机共用同一套 DOM 和同一套技能逻辑 -->
   <div id="skillBar" class="skill-bar" aria-label="角色技能">
     <button class="skill-slot skill-q" data-skill="q" type="button" aria-label="Q 极速射击">
-      <img class="skill-icon" src="assets/skills/edg-q.svg?v=20261020-12" alt="">
+      <img class="skill-icon" src="assets/skills/edg-q.svg?v=20261020-13" alt="">
       <span class="skill-key">Q</span>
       <span class="skill-cd-mask" aria-hidden="true"></span>
       <span class="skill-timer" aria-hidden="true"></span>
       <span class="skill-name">极速射击</span>
     </button>
     <button class="skill-slot skill-e" data-skill="e" type="button" aria-label="E 嗜血杀戮">
-      <img class="skill-icon" src="assets/skills/edg-e.svg?v=20261020-12" alt="">
+      <img class="skill-icon" src="assets/skills/edg-e.svg?v=20261020-13" alt="">
       <span class="skill-key">E</span>
       <span class="skill-cd-mask" aria-hidden="true"></span>
       <span class="skill-timer" aria-hidden="true"></span>
       <span class="skill-name">嗜血杀戮</span>
     </button>
     <button class="skill-slot skill-r" data-skill="r" type="button" aria-label="R 终极裁决">
-      <img class="skill-icon" src="assets/skills/edg-r.svg?v=20261020-12" alt="">
+      <img class="skill-icon" src="assets/skills/edg-r.svg?v=20261020-13" alt="">
       <span class="skill-key">空格</span>
       <span class="skill-cd-mask" aria-hidden="true"></span>
       <span class="skill-timer" aria-hidden="true"></span>
@@ -241,7 +241,7 @@
           <div class="menu-buttons">
             <button id="startStageBtn" class="btn btn-primary mode-button mode-button-stage" type="button">
               <span class="mode-icon" aria-hidden="true">▣</span>
-              <span class="mode-copy"><strong>关卡挑战</strong><small>主线入口 · 完成击杀目标，每三关迎战 BOSS · 共 20 关</small></span>
+              <span class="mode-copy"><strong>关卡挑战</strong><small>主线入口 · 完成击杀目标，第 5/10/15/20 关迎战主题 BOSS · 共 20 关</small></span>
               <span class="button-arrow" aria-hidden="true">→</span>
             </button>
             <button id="startSurvivalBtn" class="btn btn-secondary mode-button mode-button-survival" type="button">
@@ -274,7 +274,7 @@
               <div class="wallet-copy"><span>金币余额</span><strong id="menuCoins">0</strong></div>
             </div>
             <div class="equipped-tile">
-              <img id="menuSkinImage" src="assets/skins/edg.png?v=20261020-12" alt="当前装备皮肤">
+              <img id="menuSkinImage" src="assets/skins/edg.png?v=20261020-13" alt="当前装备皮肤">
               <div class="wallet-copy"><span>当前皮肤</span><strong id="menuSkinName">EDG</strong></div>
             </div>
           </div>
@@ -301,7 +301,7 @@
             <span><kbd>WASD</kbd> 移动</span>
             <span><kbd>鼠标</kbd> 瞄准 / 射击</span>
             <span><kbd>空格</kbd> 终极技能（EDG / EDG 2026）</span>
-            <span><kbd>Shift</kbd> 冲刺</span>
+            <span><kbd>F</kbd> 闪避</span>
             <span><kbd>ESC</kbd> 暂停</span>
           </div>
           <p class="save-note">战绩、金币、皮肤与音效设置自动保存在本机 localStorage，不上传任何数据。</p>
@@ -526,7 +526,7 @@
               <li><span><kbd>Q</kbd> / <kbd>E</kbd> / <kbd>空格</kbd></span><em>释放当前形态技能；空格为已实装形态的大招</em></li>
               <li><span><kbd>Tab</kbd></span><em>显示 / 隐藏角色属性面板</em></li>
               <li><span><kbd>空格</kbd></span><em>EDG / EDG 2026 终极技能；其他形态仍为冲刺</em></li>
-              <li><span><kbd>Shift</kbd></span><em>冲刺（有冷却，冲刺时无敌）</em></li>
+              <li><span><kbd>F</kbd></span><em>闪避（有冷却，闪避时无敌）</em></li>
               <li><span><kbd>1</kbd>—<kbd>5</kbd></span><em>切换已解锁的枪械</em></li>
               <li><span><kbd>ESC</kbd> / <kbd>P</kbd></span><em>暂停 / 继续</em></li>
             </ul>
@@ -591,8 +591,8 @@
     </div>
   </div>
 
-  <script src="events.js?v=20261020-12" defer></script>
-  <script src="forms.js?v=20261020-12" defer></script>
-  <script src="game.js?v=20261020-12" defer></script>
+  <script src="events.js?v=20261020-13" defer></script>
+  <script src="forms.js?v=20261020-13" defer></script>
+  <script src="game.js?v=20261020-13" defer></script>
 </body>
 </html>

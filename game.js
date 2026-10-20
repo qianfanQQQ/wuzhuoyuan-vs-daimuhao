@@ -21,6 +21,59 @@
     snow: { soft: 'rgba(191,233,255,0.22)', strong: 'rgba(191,233,255,0.7)' },
     grass: { soft: 'rgba(184,233,134,0.2)', strong: 'rgba(184,233,134,0.62)' }
   };
+  const STAGE_BOSS_STAGES = [5, 10, 15, 20];
+  const STAGE_BOSS_CONFIG = {
+    5: { tier: 1, hp: 4200, damageMult: 1, cooldownMult: 1, countBonus: 0, speedMult: 1 },
+    10: { tier: 2, hp: 7000, damageMult: 1.15, cooldownMult: 0.88, countBonus: 2, speedMult: 1.05 },
+    15: { tier: 3, hp: 10000, damageMult: 1.3, cooldownMult: 0.78, countBonus: 4, speedMult: 1.1 },
+    20: { tier: 4, hp: 14000, damageMult: 1.5, cooldownMult: 0.68, countBonus: 6, speedMult: 1.15 }
+  };
+  const BOSS_THEMES = {
+    desert: {
+      name: '沙暴代牧豪',
+      title: '沙暴之怒',
+      accent: '#f3a640',
+      ring: '#e38b2e',
+      bullet: '#ffbd5c',
+      aura: 'rgba(255, 166, 72, 0.2)',
+      rage: '#ff7138',
+      tagline: '黄沙掩埋了最后一点耐心。'
+    },
+    snow: {
+      name: '冰霜代牧豪',
+      title: '冰封审判',
+      accent: '#7bdcff',
+      ring: '#4cc8f2',
+      bullet: '#9be9ff',
+      aura: 'rgba(92, 205, 255, 0.2)',
+      rage: '#ff6c8f',
+      tagline: '雪原之上，连呼吸都被冻结。'
+    },
+    grass: {
+      name: '荒野代牧豪',
+      title: '荒野战首',
+      accent: '#9be36b',
+      ring: '#65b84a',
+      bullet: '#b6ff76',
+      aura: 'rgba(122, 220, 92, 0.18)',
+      rage: '#ff7854',
+      tagline: '草叶在震动，他准备结束这场追逐。'
+    },
+    default: {
+      name: '暴走的好兄弟',
+      title: '暴走',
+      accent: '#ff5a78',
+      ring: '#ff4f6d',
+      bullet: '#ff5a78',
+      aura: 'rgba(255, 79, 109, 0.14)',
+      rage: '#ff5a3c',
+      tagline: '你的好兄弟彻底急了！'
+    }
+  };
+
+  function isStageBossStage(stage) {
+    return STAGE_BOSS_STAGES.indexOf(stage) !== -1;
+  }
   const SAVE_KEY = 'brother_stop_chasing_me_save_v1';
   const MAX_ENEMIES = 105;
   const MAX_BULLETS = 380;
@@ -824,8 +877,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-12';
-  const BULLET_VERSION = '20261020-12';
+  const AVATAR_VERSION = '20261020-13';
+  const BULLET_VERSION = '20261020-13';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -2087,7 +2140,7 @@
     if (game.mode === 'stage') {
       setBanner(
         '第 ' + game.stage + ' 关继续',
-        '目标：击败 ' + game.stageTarget + ' 名追兵' + (game.stage % 3 === 0 ? ' · 本关有 BOSS' : ''),
+        '目标：击败 ' + game.stageTarget + ' 名追兵' + (isStageBossStage(game.stage) ? ' · 本关有 BOSS' : ''),
         'stage',
         2.4
       );
@@ -2487,21 +2540,16 @@
       return;
     }
     if (code === 'KeyF') {
-      // F 保留为备用换弹键；R 是恢复到原项目的正式换弹键。
-      tryReload(false);
+      tryDash();
       return;
     }
     if (code === 'Space') {
       if (currentUltimateUsesSpace()) {
-        // 空格在已实现终极技能的形态下只释放大招，不再触发冲刺。
         castSkill('r');
-        return;
       }
-      tryDash();
       return;
     }
     if (code === 'ShiftLeft' || code === 'ShiftRight') {
-      tryDash();
       return;
     }
     if (code.indexOf('Digit') === 0 || code.indexOf('Numpad') === 0) {
@@ -4030,6 +4078,9 @@
     const isFarEnemy = type === 'normal' &&
       game.mode === 'stage' &&
       Math.random() < stageDiff.farEnemyChance;
+    const isCharger = type === 'elite' &&
+      game.mode === 'stage' &&
+      Math.random() < stageDiff.farEnemyChance;
     const far = stageDiff ? stageDiff.farEnemy : STAGE_DIFFICULTY.farEnemy;
 
     const hp = def.hp * hpScale * (isElite ? rand(0.96, 1.08) : rand(0.94, 1.06));
@@ -4045,7 +4096,7 @@
       damage: def.damage * damageScale,
       xpValue: def.xp,
       scoreValue: def.score,
-      ring: isFarEnemy ? '#ffb35e' : def.ring,
+      ring: isCharger ? '#ff4b4b' : isFarEnemy ? '#ffb35e' : def.ring,
       hitFlash: 0,
       attackCd: rand(0.3, 0.8),
       attackFlash: 0,
@@ -4067,7 +4118,16 @@
       strafeDir: Math.random() < 0.5 ? -1 : 1,
       strafeTimer: rand(1.8, 3.5),
       ranged: isFarEnemy,
-      variant: isFarEnemy ? 'ranged' : null,
+      variant: isCharger ? 'charger' : isFarEnemy ? 'ranged' : null,
+      chargeState: 'idle',
+      chargeCd: rand(1.8, 3.2),
+      chargeTime: 0,
+      chargeRecover: 0,
+      chargeDirX: 0,
+      chargeDirY: 1,
+      chargeDistance: 0,
+      chargeTravelled: 0,
+      chargeSpeed: 0,
       shootCd: isFarEnemy ? rand(0.9, 1.8) : 0,
       shootWindup: 0,
       shotsFired: 0,
@@ -4106,26 +4166,36 @@
     const def = ENEMY_BASE.boss;
     const position = findSpawnPosition(Math.min(view.w, view.h) * 0.78 + 160);
     const survivalHp = 1200 + game.time * 12;
-    const stageHp = Math.min(
-      STAGE_DIFFICULTY.bossHpCap,
-      1500 + (game.stage - 1) * 500
-    );
-    const hp = game.mode === 'stage' ? stageHp : survivalHp;
+    const stageBoss = game.mode === 'stage' && isStageBossStage(game.stage);
+    const stageCfg = stageBoss ? STAGE_BOSS_CONFIG[game.stage] : null;
+    const themeKey = stageBoss ? (game.mapTheme || 'default') : 'default';
+    const theme = BOSS_THEMES[themeKey] || BOSS_THEMES.default;
+    const hp = stageCfg ? stageCfg.hp : survivalHp;
 
     const boss = {
       uid: ++game.enemyUid,
       type: 'boss',
-      name: '暴走的好兄弟',
+      name: stageBoss ? theme.name : '暴走的好兄弟',
+      title: stageBoss ? theme.title : '暴走',
       x: position.x,
       y: position.y,
       r: def.radius,
       hp: hp,
       maxHp: hp,
-      speed: def.speed + Math.min(28, game.time / 24),
-      damage: def.damage * (1 + game.time / 420),
+      speed: (def.speed + Math.min(28, game.time / 24)) * (stageCfg ? stageCfg.speedMult : 1),
+      damage: def.damage * (1 + game.time / 420) * (stageCfg ? stageCfg.damageMult : 1),
       xpValue: def.xp,
       scoreValue: def.score,
-      ring: def.ring,
+      ring: theme.ring,
+      theme: themeKey,
+      themeAccent: theme.accent,
+      themeBullet: theme.bullet,
+      themeRage: theme.rage,
+      stageBoss: stageBoss,
+      tier: stageCfg ? stageCfg.tier : 0,
+      damageMult: stageCfg ? stageCfg.damageMult : 1,
+      cooldownMult: stageCfg ? stageCfg.cooldownMult : 1,
+      countBonus: stageCfg ? stageCfg.countBonus : 0,
       hitFlash: 0,
       attackCd: 1,
       attackFlash: 0,
@@ -4153,16 +4223,16 @@
     game.stageState = game.mode === 'stage' ? 'boss' : game.stageState;
 
     setBanner(
-      '⚠ BOSS 来袭',
-      '你的好兄弟彻底急了！' + (source === 'stage' ? ' 击败他，才能进入下一关。' : ''),
+      '⚠ ' + theme.name + ' 来袭',
+      theme.tagline + (source === 'stage' ? ' 击败他，才能进入下一关。' : ''),
       'boss',
       3.1
     );
-    addToast('BOSS 已出现 · 注意弹幕', 'warn', 3);
+    addToast('BOSS 已出现 · ' + theme.title, 'warn', 3);
     addShake(18);
     audio.play('boss_warn');
 
-    addRing(position.x, position.y, 40, '#ff4f6d', 0.9, 3);
+    addRing(position.x, position.y, 40, theme.ring, 0.9, 3);
     for (let i = 0; i < 30; i += 1) {
       const angle = rand(0, TAU);
       const speed = rand(70, 260);
@@ -4173,7 +4243,7 @@
         Math.sin(angle) * speed,
         rand(0.3, 0.8),
         rand(2, 7),
-        Math.random() < 0.5 ? '#ff4f6d' : '#ffad54',
+        Math.random() < 0.5 ? theme.ring : theme.accent,
         true
       );
     }
@@ -4252,7 +4322,8 @@
       const dy = p.y - enemy.y;
       const dist = Math.hypot(dx, dy);
       const contactDistance = enemy.r + p.r - 3;
-      if (dist < contactDistance && enemy.attackCd <= 0) {
+      const chargerBusy = enemy.variant === 'charger' && enemy.chargeState !== 'idle';
+      if (dist < contactDistance && enemy.attackCd <= 0 && !chargerBusy) {
         enemy.attackCd = enemy.type === 'boss' ? 1.05 : 0.86;
         enemy.attackFlash = 0.24;
         addRing(
@@ -4269,6 +4340,75 @@
     }
 
     separateEnemies();
+  }
+
+  function updateChargerEnemy(enemy, dt, dist, directionX, directionY) {
+    const p = game.player;
+    enemy.chargeCd -= dt;
+
+    if (enemy.chargeState === 'idle') {
+      const speed = enemy.speed * 0.58;
+      if (dist > enemy.r + p.r + 12) {
+        enemy.x += (directionX * speed + enemy.pushX) * dt;
+        enemy.y += (directionY * speed + enemy.pushY) * dt;
+        clampToMap(enemy);
+      }
+      if (enemy.chargeCd <= 0 && dist < 560) {
+        enemy.chargeState = 'warning';
+        enemy.chargeTime = 0.92;
+        enemy.chargeDirX = directionX;
+        enemy.chargeDirY = directionY;
+        enemy.chargeDistance = Math.min(540, Math.max(270, dist + 120));
+        enemy.chargeSpeed = 620 + Math.min(160, (game.stage || 1) * 8);
+        enemy.chargeTravelled = 0;
+        enemy.chargeTime = 0.92;
+        enemy.castFlash = 0.32;
+        addRing(enemy.x, enemy.y, enemy.r + 10, '#ff4b4b', 0.28, 2);
+        audio.play('enemy_shot');
+      }
+      return;
+    }
+
+    if (enemy.chargeState === 'warning') {
+      enemy.chargeTime -= dt;
+      if (enemy.chargeTime <= 0) {
+        enemy.chargeState = 'dash';
+        enemy.chargeTime = enemy.chargeDistance / Math.max(1, enemy.chargeSpeed) + 0.04;
+        enemy.chargeTravelled = 0;
+        enemy.attackFlash = 0.2;
+        audio.play('enemy_shot');
+      }
+      return;
+    }
+
+    if (enemy.chargeState === 'dash') {
+      const oldX = enemy.x;
+      const oldY = enemy.y;
+      const dashSpeed = enemy.chargeSpeed || 620;
+      enemy.x += enemy.chargeDirX * dashSpeed * dt;
+      enemy.y += enemy.chargeDirY * dashSpeed * dt;
+      enemy.chargeTravelled += dashSpeed * dt;
+      enemy.chargeTime -= dt;
+      clampToMap(enemy);
+      if (segmentCircleHit(oldX, oldY, enemy.x, enemy.y, p.x, p.y, p.r + enemy.r - 2)) {
+        enemy.attackCd = 0.9;
+        enemy.chargeState = 'recover';
+        enemy.chargeRecover = 0.85;
+        enemy.attackFlash = 0.24;
+        addRing(enemy.x, enemy.y, enemy.r + 12, '#ff4b4b', 0.3, 3);
+        damagePlayer(enemy.damage * 1.15, enemy.x, enemy.y);
+      } else if (enemy.chargeTime <= 0 || enemy.chargeTravelled >= enemy.chargeDistance) {
+        enemy.chargeState = 'recover';
+        enemy.chargeRecover = 0.85;
+      }
+      return;
+    }
+
+    enemy.chargeRecover -= dt;
+    if (enemy.chargeRecover <= 0) {
+      enemy.chargeState = 'idle';
+      enemy.chargeCd = rand(2.4, 3.9);
+    }
   }
 
   function updateRangedEnemy(enemy, dt, dist, directionX, directionY) {
@@ -4348,6 +4488,11 @@
     const dist = Math.max(0.001, Math.hypot(dx, dy));
     const directionX = dx / dist;
     const directionY = dy / dist;
+
+    if (enemy.variant === 'charger') {
+      updateChargerEnemy(enemy, dt, dist, directionX, directionY);
+      return;
+    }
 
     if (enemy.ranged) {
       updateRangedEnemy(enemy, dt, dist, directionX, directionY);
@@ -4436,14 +4581,14 @@
     boss.specialCd -= dt;
     if (boss.specialCd <= 0 && boss.spawnT <= 0) {
       fireBossRadial(boss);
-      boss.specialCd = boss.enraged ? 1.75 : 2.65;
+      boss.specialCd = (boss.enraged ? 1.75 : 2.65) * (boss.cooldownMult || 1);
       boss.castFlash = 0.32;
     }
 
     boss.volleyCd -= dt;
     if (boss.volleyCd <= 0 && boss.spawnT <= 0 && dist < 1100) {
       fireBossVolley(boss);
-      boss.volleyCd = boss.enraged ? 2.05 : 3.55;
+      boss.volleyCd = (boss.enraged ? 2.05 : 3.55) * (boss.cooldownMult || 1);
       boss.castFlash = 0.24;
     }
 
@@ -4466,9 +4611,9 @@
 
   function fireBossRadial(boss) {
     if (!game) return;
-    const count = boss.enraged ? 18 : 11;
+    const count = (boss.enraged ? 18 : 11) + (boss.countBonus || 0);
     const offset = rand(0, TAU);
-    const speed = boss.enraged ? 250 : 215;
+    const speed = (boss.enraged ? 250 : 215) * (boss.stageBoss ? 1 + boss.tier * 0.03 : 1);
     for (let i = 0; i < count; i += 1) {
       const angle = offset + (i / count) * TAU;
       spawnEnemyBullet(
@@ -4476,9 +4621,9 @@
         boss.y + Math.sin(angle) * (boss.r * 0.7),
         angle,
         speed,
-        boss.enraged ? 12 : 10,
+        (boss.enraged ? 12 : 10) * (boss.damageMult || 1),
         6.5,
-        boss.enraged ? '#ff764f' : '#ff5a78'
+        boss.enraged ? (boss.themeRage || '#ff764f') : (boss.themeBullet || '#ff5a78')
       );
     }
     addRing(boss.x, boss.y, boss.r * 0.7, '#ff5a78', 0.34, 4);
@@ -4490,8 +4635,8 @@
     if (!game) return;
     const p = game.player;
     const baseAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
-    const count = boss.enraged ? 5 : 3;
-    const speed = boss.enraged ? 390 : 325;
+    const count = (boss.enraged ? 5 : 3) + Math.floor((boss.countBonus || 0) * 0.5);
+    const speed = (boss.enraged ? 390 : 325) * (boss.stageBoss ? 1 + boss.tier * 0.025 : 1);
     for (let i = 0; i < count; i += 1) {
       const angle = baseAngle + (i - (count - 1) * 0.5) * 0.115;
       spawnEnemyBullet(
@@ -4499,12 +4644,12 @@
         boss.y + Math.sin(angle) * (boss.r * 0.74),
         angle,
         speed,
-        boss.enraged ? 14 : 12,
+        (boss.enraged ? 14 : 12) * (boss.damageMult || 1),
         5.5,
-        '#ffad54'
+        boss.themeBullet || '#ffad54'
       );
     }
-    addRing(boss.x, boss.y, boss.r * 0.55, '#ffad54', 0.28, 3);
+    addRing(boss.x, boss.y, boss.r * 0.55, boss.themeAccent || '#ffad54', 0.28, 3);
     audio.play('boss_shoot');
   }
 
@@ -4537,6 +4682,7 @@
       spiral: null,
       hitFlash: 0,
       castFlash: 0,
+      rageFlash: 0,
       drift: rand(0, TAU),
       dead: false,
       defeated: false
@@ -4621,11 +4767,11 @@
     const phase2 = boss.enraged;
     const type = telegraph.type;
     if (type === 'fan') {
-      fireEventFan(boss, telegraph.baseAngle, phase2 ? 9 : 7, phase2 ? 0.95 : 0.8, phase2 ? 300 : 265, 8);
-      boss.attackTimer = phase2 ? 1.05 : 1.35;
+      fireEventFan(boss, telegraph.baseAngle, phase2 ? 11 : 7, phase2 ? 1.05 : 0.8, phase2 ? 310 : 265, 8);
+      boss.attackTimer = phase2 ? 0.78 : 1.35;
     } else if (type === 'ring') {
-      fireEventRing(boss, phase2 ? 18 : 14, phase2 ? 225 : 195, 7);
-      boss.attackTimer = phase2 ? 1.1 : 1.45;
+      fireEventRing(boss, phase2 ? 20 : 14, phase2 ? 235 : 195, 7);
+      boss.attackTimer = phase2 ? 0.82 : 1.45;
     } else if (type === 'delayed') {
       for (let i = 0; i < telegraph.markers.length; i += 1) {
         const marker = telegraph.markers[i];
@@ -4644,18 +4790,18 @@
         }
         addRing(marker.x, marker.y, 18, '#ffb15c', 0.32, 3);
       }
-      boss.attackTimer = phase2 ? 1.2 : 1.5;
+      boss.attackTimer = phase2 ? 0.85 : 1.5;
     } else if (type === 'spiral') {
       boss.spiral = {
-        time: phase2 ? 1.75 : 1.5,
+        time: phase2 ? 1.9 : 1.5,
         tick: 0,
         angle: telegraph.baseAngle,
         dir: Math.random() < 0.5 ? -1 : 1
       };
     } else if (type === 'combo') {
-      fireEventFan(boss, telegraph.baseAngle, 9, 0.9, 280, 8);
-      fireEventRing(boss, 16, 210, 7);
-      boss.attackTimer = 1.45;
+      fireEventFan(boss, telegraph.baseAngle, phase2 ? 11 : 9, 0.95, phase2 ? 290 : 280, 8);
+      fireEventRing(boss, phase2 ? 18 : 16, phase2 ? 220 : 210, 7);
+      boss.attackTimer = phase2 ? 0.82 : 1.45;
     }
     boss.castFlash = 0.22;
     audio.play('boss_shoot');
@@ -4667,8 +4813,8 @@
     spiral.time -= dt;
     spiral.tick -= dt;
     if (spiral.tick <= 0) {
-      spiral.tick = boss.enraged ? 0.095 : 0.115;
-      spiral.angle += (boss.enraged ? 0.19 : 0.16) * spiral.dir;
+      spiral.tick = boss.enraged ? 0.08 : 0.115;
+      spiral.angle += (boss.enraged ? 0.22 : 0.16) * spiral.dir;
       for (let arm = 0; arm < 2; arm += 1) {
         const angle = spiral.angle + arm * Math.PI;
         spawnEventBossBullet(
@@ -4685,7 +4831,7 @@
     }
     if (spiral.time <= 0) {
       boss.spiral = null;
-      boss.attackTimer = boss.enraged ? 0.95 : 1.25;
+      boss.attackTimer = boss.enraged ? 0.78 : 1.25;
     }
   }
 
@@ -4697,6 +4843,7 @@
 
     boss.hitFlash = Math.max(0, boss.hitFlash - dt);
     boss.castFlash = Math.max(0, boss.castFlash - dt);
+    boss.rageFlash = Math.max(0, (boss.rageFlash || 0) - dt);
 
     if (boss.spawnT > 0) {
       boss.spawnT -= dt;
@@ -4708,9 +4855,13 @@
       boss.phase = 2;
       boss.patternIndex = 0;
       boss.telegraph = null;
-      boss.attackTimer = 0.9;
-      addToast('吴朝阳进入第二阶段 · 弹幕加强', 'warn', 2.5);
-      addShake(14);
+      boss.attackTimer = 0.7;
+      boss.rageFlash = 1.2;
+      setBanner('抉择之影 · 狂暴', '吴朝阳进入第二阶段，弹幕密度大幅提升。', 'boss', 2.6);
+      addToast('吴朝阳进入狂暴阶段 · 小心高密度弹幕', 'warn', 2.8);
+      addRing(boss.x, boss.y, boss.r + 26, '#ff5a78', 0.75, 4);
+      addRing(boss.x, boss.y, boss.r + 60, '#ffcf66', 0.55, 2);
+      addShake(16);
       audio.play('boss_warn');
     }
 
@@ -5140,7 +5291,7 @@
 
   function completeStageObjective() {
     if (!game || game.mode !== 'stage' || game.stageState !== 'fighting' || game.eventBossActive) return;
-    if (game.stage % 3 === 0) {
+    if (isStageBossStage(game.stage)) {
       game.stageState = 'boss';
       audio.play('stage');
       spawnBoss('stage');
@@ -5200,7 +5351,7 @@
     healPlayer(15, true);
     setBanner(
       '第 ' + game.stage + ' 关',
-      '目标：击败 ' + game.stageTarget + ' 名追兵' + (game.stage % 3 === 0 ? ' · 本关有 BOSS' : ''),
+      '目标：击败 ' + game.stageTarget + ' 名追兵' + (isStageBossStage(game.stage) ? ' · 本关有 BOSS' : ''),
       'stage',
       2.4
     );
@@ -6519,6 +6670,7 @@
     drawOrbs();
     drawRings();
     drawEventBossTelegraphs();
+    drawChargerTelegraphs();
     drawRewindEcho();
     drawCharacters(now);
     drawBullets();
@@ -7033,6 +7185,8 @@
     ctx.fill();
 
     const isRanged = enemy.variant === 'ranged';
+    const isCharger = enemy.variant === 'charger';
+    const bossTheme = enemy.type === 'boss' ? (BOSS_THEMES[enemy.theme] || BOSS_THEMES.default) : null;
     if (isRanged) {
       const farAura = ctx.createRadialGradient(
         enemy.x,
@@ -7064,8 +7218,8 @@
 
     if (enemy.type === 'boss') {
       const aura = ctx.createRadialGradient(enemy.x, enemy.y, enemy.r * 0.42, enemy.x, enemy.y, enemy.r * 2.15);
-      aura.addColorStop(0, enemy.enraged ? 'rgba(255,53,91,0.23)' : 'rgba(255,79,109,0.14)');
-      aura.addColorStop(1, 'rgba(255,79,109,0)');
+      aura.addColorStop(0, bossTheme ? bossTheme.aura : 'rgba(255,79,109,0.14)');
+      aura.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = aura;
       ctx.beginPath();
       ctx.arc(enemy.x, enemy.y, enemy.r * 2.15, 0, TAU);
@@ -7074,7 +7228,8 @@
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
       ctx.rotate(time * 0.32);
-      ctx.strokeStyle = enemy.enraged ? 'rgba(255,93,70,0.58)' : 'rgba(255,79,109,0.38)';
+      ctx.strokeStyle = enemy.enraged ? (enemy.themeRage || '#ff5a3c') : (enemy.themeAccent || '#ff4f6d');
+      ctx.globalAlpha = enemy.enraged ? 0.7 : 0.48;
       ctx.lineWidth = 2;
       for (let i = 0; i < 12; i += 1) {
         const angle = (i / 12) * TAU;
@@ -7085,7 +7240,24 @@
         ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
         ctx.stroke();
       }
+      ctx.globalAlpha = 1;
       ctx.restore();
+
+      if (bossTheme) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 4; i += 1) {
+          const angle = time * (enemy.theme === 'snow' ? 0.9 : 0.55) + i * TAU / 4;
+          const rr = enemy.r * (1.55 + i * 0.14);
+          ctx.globalAlpha = 0.18 + (i % 2) * 0.08;
+          ctx.strokeStyle = bossTheme.accent;
+          ctx.lineWidth = enemy.theme === 'snow' ? 2 : 3;
+          ctx.beginPath();
+          ctx.arc(enemy.x, enemy.y, rr, angle, angle + 0.42);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
     } else if (enemy.type === 'elite') {
       ctx.save();
       ctx.translate(enemy.x, enemy.y);
@@ -7107,8 +7279,8 @@
       enemy.y,
       radius,
       enemy.type === 'boss'
-        ? (enemy.enraged ? '#ff5a3c' : '#ff4f6d')
-        : isRanged ? '#ffb35e' : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
+        ? (enemy.enraged ? (enemy.themeRage || '#ff5a3c') : (enemy.ring || '#ff4f6d'))
+        : isCharger ? '#ff4b4b' : isRanged ? '#ffb35e' : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
       {
         ringWidth: enemy.type === 'boss' ? 3.5 : (isRanged || enemy.type === 'elite') ? 2.4 : 1.8,
         dashed: enemy.type === 'elite'
@@ -7172,7 +7344,7 @@
     if (enemy.attackFlash > 0) {
       ctx.save();
       ctx.globalAlpha = clamp(enemy.attackFlash * 4.2, 0, 0.85);
-      ctx.strokeStyle = isRanged ? '#ffb35e' : '#ff6b7d';
+      ctx.strokeStyle = isCharger ? '#ff4b4b' : isRanged ? '#ffb35e' : '#ff6b7d';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(enemy.x, enemy.y, radius + 11, 0, TAU);
@@ -7231,9 +7403,58 @@
         ctx.fillText('◈ 远程', enemy.x, enemy.y - radius - 19);
         ctx.globalAlpha = 1;
       }
+      if (isCharger) {
+        ctx.globalAlpha = 0.95;
+        setMonoFont(7.5, 800);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fillText(enemy.chargeState === 'warning' ? '⚠ 冲撞' : '冲撞精英', enemy.x, enemy.y - radius - 19);
+        ctx.globalAlpha = 1;
+      }
     }
 
     ctx.restore();
+  }
+
+  function drawChargerTelegraphs() {
+    if (!game || !game.enemies) return;
+    const time = performance.now() * 0.001;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead || enemy.variant !== 'charger') continue;
+      if (enemy.chargeState !== 'warning' && enemy.chargeState !== 'dash') continue;
+      const dirX = enemy.chargeDirX;
+      const dirY = enemy.chargeDirY;
+      const startX = enemy.x + dirX * enemy.r;
+      const startY = enemy.y + dirY * enemy.r;
+      const endX = enemy.x + dirX * (enemy.chargeDistance || 320);
+      const endY = enemy.y + dirY * (enemy.chargeDistance || 320);
+      const pulse = 0.5 + Math.sin(time * 16) * 0.2;
+      ctx.save();
+      ctx.globalAlpha = enemy.chargeState === 'warning' ? pulse : 0.18;
+      ctx.strokeStyle = '#ff3030';
+      ctx.lineWidth = enemy.r * 1.65;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.globalAlpha = enemy.chargeState === 'warning' ? 0.9 : 0.3;
+      ctx.strokeStyle = '#ffd0c0';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([12, 8]);
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#ff3030';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(endX, endY, enemy.r * 0.55, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function drawEventBossTelegraphs() {
@@ -7370,6 +7591,26 @@
     ctx.beginPath();
     ctx.arc(boss.x, boss.y, boss.r * 2.4, 0, TAU);
     ctx.fill();
+
+    if (boss.enraged) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.2 + Math.sin(time * 8) * 0.08;
+      ctx.strokeStyle = '#ff5a78';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, boss.r * (1.55 + (boss.rageFlash > 0 ? boss.rageFlash * 0.6 : 0)), 0, TAU);
+      ctx.stroke();
+      if (boss.rageFlash > 0) {
+        ctx.globalAlpha = clamp(boss.rageFlash, 0, 1) * 0.7;
+        ctx.strokeStyle = '#ffcf66';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, boss.r + (1.2 - boss.rageFlash) * 90, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(boss.x, boss.y);
@@ -8611,18 +8852,19 @@
     const barY = compact ? (view.w < 390 ? 198 : 168) : view.h - 104;
     const labelY = barY - 7;
 
-    drawPanel(x - 10, barY - 24, w + 20, 54, 12, 'rgba(8,13,21,0.84)', 'rgba(255,79,109,0.28)');
+    const accent = boss.enraged ? (boss.themeRage || '#ff5a3c') : (boss.themeAccent || '#ff4f6d');
+    drawPanel(x - 10, barY - 24, w + 20, 54, 12, 'rgba(8,13,21,0.84)', accent);
     ctx.textAlign = 'left';
     setFont(11, 800);
     ctx.fillStyle = '#ffdcdf';
-    ctx.fillText('☠ ' + boss.name, x, labelY);
+    ctx.fillText('☠ ' + boss.name + (boss.title ? ' · ' + boss.title : ''), x, labelY);
     ctx.textAlign = 'right';
     setMonoFont(9, 700);
-    ctx.fillStyle = boss.enraged ? '#ff734f' : '#ff96a5';
+    ctx.fillStyle = boss.enraged ? (boss.themeRage || '#ff734f') : '#ff96a5';
     ctx.fillText(boss.enraged ? 'ENRAGED' : 'PHASE ' + boss.phase, x + w, labelY);
 
     const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
-    drawBar(x, barY + 3, w, 11, ratio, boss.enraged ? '#ff5a3c' : '#ff4f6d', '#ffcf66', 'rgba(255,255,255,0.08)');
+    drawBar(x, barY + 3, w, 11, ratio, accent, boss.enraged ? '#ffcf66' : (boss.themeBullet || '#ffcf66'), 'rgba(255,255,255,0.08)');
     setMonoFont(8, 700);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#ffeef0';
@@ -8784,7 +9026,7 @@
     const compact = view.w < 760;
     const text = hasTouch
       ? '左摇杆移动 · 右摇杆瞄准 · 开火按钮射击'
-      : 'WASD 移动 · 鼠标瞄准/射击 · R 换弹 · Q/E/空格 技能 · Shift 冲刺 · 1-5 切枪';
+      : 'WASD 移动 · 鼠标瞄准/射击 · R 换弹 · Q/E/空格 技能 · F 闪避 · 1-5 切枪';
     const narrow = view.w < 390;
     const y = compact
       ? (game.boss ? (narrow ? 268 : 280) : (narrow ? 226 : 230))
