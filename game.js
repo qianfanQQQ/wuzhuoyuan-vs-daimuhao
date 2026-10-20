@@ -763,6 +763,16 @@
         case 'enemy_shot':
           this.tone(230, 120, 0.08, 'square', 0.026);
           break;
+        case 'skill':
+          [440, 660, 880].forEach((freq, index) => {
+            this.tone(freq, freq * 1.06, 0.16, 'triangle', 0.045, index * 0.055);
+          });
+          this.tone(1320, 1760, 0.24, 'sine', 0.03, 0.14);
+          break;
+        case 'scythe':
+          this.tone(155, 70, 0.28, 'sawtooth', 0.035);
+          this.tone(620, 280, 0.18, 'triangle', 0.04, 0.02);
+          break;
         case 'purchase':
           this.tone(523.25, 523.25, 0.11, 'triangle', 0.05);
           this.tone(659.25, 659.25, 0.11, 'triangle', 0.05, 0.08);
@@ -801,8 +811,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-5';
-  const BULLET_VERSION = '20261020-5';
+  const AVATAR_VERSION = '20261020-6';
+  const BULLET_VERSION = '20261020-6';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1092,6 +1102,60 @@
     return skinAvatars[skin.id] || avatars.player;
   }
 
+  const SKILL_SLOTS = ['q', 'e', 'r'];
+
+  function getCurrentForm() {
+    if (window.CharacterForms) {
+      return CharacterForms.getBySkinId(save.equippedSkin) ||
+        CharacterForms.getById(DEFAULT_SKIN_ID);
+    }
+    return { id: DEFAULT_SKIN_ID, skinId: DEFAULT_SKIN_ID, name: 'EDG', title: '', implemented: false, skills: null };
+  }
+
+  function getCurrentFormId() {
+    return getCurrentForm().id;
+  }
+
+  function getFormSkill(slot, formId) {
+    if (!window.CharacterForms) return null;
+    return CharacterForms.getSkill(formId || getCurrentFormId(), slot);
+  }
+
+  function createSkillState(formId, kills) {
+    return {
+      formId: formId || DEFAULT_SKIN_ID,
+      q: { cooldown: 0, active: 0 },
+      e: { cooldown: 0, active: 0 },
+      r: {
+        baseKills: Math.max(0, Math.floor(Number(kills) || 0)),
+        pendingShots: 0,
+        shotIndex: 0,
+        castFlash: 0
+      }
+    };
+  }
+
+  function isEdgForm() {
+    return !!game && game.player && game.player.formId === 'edg' &&
+      !!window.CharacterForms && CharacterForms.hasSkills('edg');
+  }
+
+  function isSkillActive(slot) {
+    return isEdgForm() && game.player.skills &&
+      game.player.skills[slot] && game.player.skills[slot].active > 0;
+  }
+
+  function hasInfiniteAmmo() {
+    return isSkillActive('q');
+  }
+
+  function getRCharge() {
+    if (!isEdgForm() || !game.player.skills) return 0;
+    const skill = getFormSkill('r', 'edg');
+    if (!skill) return 0;
+    return Math.min(skill.requiredKills, Math.max(0, game.kills - game.player.skills.r.baseKills));
+  }
+
   function skinImageSrc(skin) {
     return buildAvatarUrl('skins/' + skin.file);
   }
@@ -1271,6 +1335,12 @@
     inventoryBackBtn: $('inventoryBackBtn'),
     inventoryMessage: $('inventoryMessage'),
     pauseShopBtn: $('pauseShopBtn'),
+    pauseStatsBtn: $('pauseStatsBtn'),
+    statsPanel: $('statsPanel'),
+    statsFormName: $('statsFormName'),
+    statsFormTitle: $('statsFormTitle'),
+    statsCloseBtn: $('statsCloseBtn'),
+    skillBar: $('skillBar'),
     pauseInventoryBtn: $('pauseInventoryBtn'),
     eventScreen: $('eventScreen'),
     eventPanel: $('eventPanel'),
@@ -1324,6 +1394,11 @@
   let lastFrameTime = performance.now();
   let activeStore = null;
   let storeReturn = null;
+  let statsPanelOpen = false;
+  let lastSkillBarRefresh = -1;
+  let lastStatsPanelRefresh = -1;
+  let skillSlots = [];
+  let statsRows = {};
   let skinActionLock = false;
 
   const input = {
@@ -1603,6 +1678,11 @@
     }
     save.equippedSkin = skin.id;
     persistSave();
+    if (game) {
+      syncPlayerForm();
+      refreshSkillBar(true);
+      refreshStatsPanel();
+    }
     refreshMenuSkin();
     refreshWalletDisplays();
     renderShop();
@@ -2290,7 +2370,7 @@
 
   function onKeyDown(event) {
     const code = event.code;
-    const gameKeys = ['Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyR', 'KeyP', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+    const gameKeys = ['Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyQ', 'KeyE', 'KeyR', 'KeyP', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
     if (gameKeys.indexOf(code) !== -1 && state !== S.MENU) {
       event.preventDefault();
     }
@@ -2310,6 +2390,20 @@
         event.preventDefault();
         closeStore();
       }
+      return;
+    }
+
+    if (code === 'Tab') {
+      if (state === S.PLAYING || state === S.PAUSED) {
+        event.preventDefault();
+        toggleStatsPanel();
+      }
+      return;
+    }
+
+    if (code === 'Escape' && statsPanelOpen) {
+      event.preventDefault();
+      closeStatsPanel();
       return;
     }
 
@@ -2340,12 +2434,24 @@
 
     audio.ensure();
 
-    if (code === 'Space') {
-      tryDash();
+    if (code === 'KeyQ') {
+      castSkill('q');
+      return;
+    }
+    if (code === 'KeyE') {
+      castSkill('e');
       return;
     }
     if (code === 'KeyR') {
+      castSkill('r');
+      return;
+    }
+    if (code === 'KeyF') {
       tryReload(false);
+      return;
+    }
+    if (code === 'Space') {
+      tryDash();
       return;
     }
     if (code.indexOf('Digit') === 0 || code.indexOf('Numpad') === 0) {
@@ -2507,7 +2613,9 @@
       recoil: 0,
       walkPhase: rand(0, TAU),
       moving: false,
-      dead: false
+      dead: false,
+      formId: save.equippedSkin,
+      skills: createSkillState(save.equippedSkin, 0)
     };
     return player;
   }
@@ -2618,6 +2726,7 @@
   }
 
   function startGame(mode) {
+    closeStatsPanel();
     hideScreens();
     hideInstructions();
     activeStore = null;
@@ -2684,6 +2793,7 @@
   }
 
   function returnToMenu() {
+    closeStatsPanel();
     hideScreens();
     hideInstructions();
     activeStore = null;
@@ -2805,6 +2915,171 @@
     return { x: x, y: y, length: Math.min(1, length) };
   }
 
+  /* =======================================================
+     形态技能运行时
+     ======================================================= */
+  function syncPlayerForm() {
+    if (!game || !game.player) return;
+    const nextFormId = getCurrentFormId();
+    const p = game.player;
+    if (p.formId === nextFormId) return;
+    p.formId = nextFormId;
+    p.skills = createSkillState(nextFormId, game.kills);
+    // 切换形态时旧的 EDG 技能效果必须立即失效，射速回到新形态的当前实际值。
+    p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+  }
+
+  function resetPlayerSkillRuntime() {
+    if (!game || !game.player || !game.player.skills) return;
+    const skills = game.player.skills;
+    skills.q.active = 0;
+    skills.e.active = 0;
+    skills.r.pendingShots = 0;
+    skills.r.shotIndex = 0;
+    skills.r.castFlash = 0;
+  }
+
+  function updatePlayerSkills(dt) {
+    if (!game || state !== S.PLAYING) return;
+    syncPlayerForm();
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return;
+
+    const q = skills.q;
+    const qWasActive = q.active > 0;
+    q.active = Math.max(0, q.active - dt);
+    q.cooldown = Math.max(0, q.cooldown - dt);
+    if (qWasActive && q.active <= 0) {
+      p.shootCd = Math.max(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+    }
+
+    const e = skills.e;
+    e.active = Math.max(0, e.active - dt);
+    e.cooldown = Math.max(0, e.cooldown - dt);
+    skills.r.castFlash = Math.max(0, skills.r.castFlash - dt);
+  }
+
+  function castSkill(slot) {
+    if (!game || state !== S.PLAYING || !game.player || game.player.dead) return false;
+    syncPlayerForm();
+    const form = getCurrentForm();
+    if (!form || !form.implemented || !form.skills) return false;
+    const def = form.skills[slot];
+    if (!def) return false;
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return false;
+
+    if (slot === 'q') {
+      if (skills.q.active > 0 || skills.q.cooldown > 0) return false;
+      skills.q.active = def.duration;
+      skills.q.cooldown = def.cooldown;
+      cancelReload();
+      p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+      addRing(p.x, p.y, p.r + 8, '#ff6b5f', 0.46, 3);
+      for (let i = 0; i < 16; i += 1) {
+        const angle = rand(0, TAU);
+        spawnParticle(
+          p.x + Math.cos(angle) * 18,
+          p.y + Math.sin(angle) * 18,
+          Math.cos(angle) * rand(70, 240),
+          Math.sin(angle) * rand(70, 240),
+          rand(0.18, 0.45),
+          rand(2, 5),
+          Math.random() < 0.5 ? '#ff6b5f' : '#ffcf66',
+          true
+        );
+      }
+      addToast('Q · 极速射击 · 双倍射速 / 无限弹药', 'good', 1.7);
+      audio.play('skill');
+      pulseSkillSlot('q');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'e') {
+      if (skills.e.active > 0 || skills.e.cooldown > 0) return false;
+      skills.e.active = def.duration;
+      skills.e.cooldown = def.cooldown;
+      addRing(p.x, p.y, p.r + 6, '#66e6a8', 0.5, 3);
+      for (let i = 0; i < 12; i += 1) {
+        spawnParticle(
+          p.x + rand(-16, 16),
+          p.y + rand(-16, 16),
+          rand(-80, 80),
+          rand(-120, -30),
+          rand(0.2, 0.5),
+          rand(2, 4),
+          Math.random() < 0.6 ? '#66e6a8' : '#ff6b7d',
+          true
+        );
+      }
+      addToast('E · 嗜血杀戮 · 击杀恢复 5 HP', 'good', 1.7);
+      audio.play('skill');
+      pulseSkillSlot('e');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'r') {
+      if (skills.r.pendingShots > 0) return false;
+      const required = def.requiredKills || 30;
+      if (getRCharge() < required) {
+        addToast('R · 终极裁决尚未充能完成', 'warn', 1.2);
+        audio.play('denied');
+        return false;
+      }
+      skills.r.baseKills = game.kills;
+      skills.r.pendingShots = def.damageSequence.length;
+      skills.r.shotIndex = 0;
+      skills.r.castFlash = 0.65;
+      addRing(p.x, p.y, p.r + 10, '#ff334f', 0.75, 4);
+      addShake(8);
+      for (let i = 0; i < 24; i += 1) {
+        const angle = rand(0, TAU);
+        spawnParticle(
+          p.x + Math.cos(angle) * 22,
+          p.y + Math.sin(angle) * 22,
+          Math.cos(angle) * rand(60, 260),
+          Math.sin(angle) * rand(60, 260),
+          rand(0.28, 0.72),
+          rand(2, 6),
+          Math.random() < 0.6 ? '#ff334f' : '#ffd0b4',
+          true
+        );
+      }
+      addToast('R · 终极裁决 · 接下来的 5 次射击变为镰刀弹', 'good', 2.2);
+      audio.play('skill');
+      pulseSkillSlot('r');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    return false;
+  }
+
+  function consumeScytheShot() {
+    if (!isEdgForm() || !game.player.skills) return null;
+    const def = getFormSkill('r', 'edg');
+    const r = game.player.skills.r;
+    if (!def || r.pendingShots <= 0) return null;
+    const index = r.shotIndex;
+    const damage = def.damageSequence[index];
+    r.shotIndex += 1;
+    r.pendingShots = Math.max(0, r.pendingShots - 1);
+    return damage === undefined ? null : { damage: damage, index: index };
+  }
+
+  function onEnemyKilled() {
+    if (!game || !game.player || game.player.dead) return;
+    if (!isEdgForm() || !isSkillActive('e')) return;
+    healPlayer(5, false);
+  }
+
   function updatePlayerMovement(dt) {
     const p = game.player;
     if (p.dead) return;
@@ -2858,15 +3133,16 @@
     }
 
     const firing = input.mouse.down || input.fireHeld;
+    const infiniteAmmo = hasInfiniteAmmo();
     if (firing && !p.reloading && p.shootCd <= 0) {
-      if (p.ammo[p.weapon] <= 0) {
+      if (p.ammo[p.weapon] <= 0 && !infiniteAmmo) {
         tryReload(true);
       } else {
         fireWeapon();
       }
     }
 
-    if (firing && !p.reloading && p.ammo[p.weapon] <= 0 && p.shootCd <= 0) {
+    if (firing && !p.reloading && !infiniteAmmo && p.ammo[p.weapon] <= 0 && p.shootCd <= 0) {
       tryReload(true);
     }
   }
@@ -2914,6 +3190,7 @@
     if (!game || state !== S.PLAYING) return;
     const p = game.player;
     if (p.dead || p.reloading) return;
+    if (hasInfiniteAmmo()) return;
     const key = p.weapon;
     const maxMag = weaponMaxMag(key);
     if (p.ammo[key] >= maxMag) {
@@ -2992,9 +3269,10 @@
   function getWeaponStats(key) {
     const p = game.player;
     const def = WEAPONS[key];
+    const rapidFire = isSkillActive('q') ? 2 : 1;
     return {
       damage: def.damage * p.damageMult,
-      fireInterval: Math.max(0.04, def.fireInterval / p.fireRateMult),
+      fireInterval: Math.max(0.04, def.fireInterval / (p.fireRateMult * rapidFire)),
       maxMag: weaponMaxMag(key),
       reloadTime: Math.max(0.22, def.reloadTime * p.reloadMult),
       pierce: def.pierce + p.pierceBonus,
@@ -3010,12 +3288,13 @@
     const key = p.weapon;
     const def = WEAPONS[key];
     const stats = getWeaponStats(key);
-    if (p.ammo[key] <= 0) {
+    const infiniteAmmo = hasInfiniteAmmo();
+    if (p.ammo[key] <= 0 && !infiniteAmmo) {
       tryReload(true);
       return;
     }
 
-    p.ammo[key] -= 1;
+    if (!infiniteAmmo) p.ammo[key] -= 1;
     p.shootCd = stats.fireInterval;
     p.muzzle = 0.075;
     p.recoil = 1;
@@ -3025,6 +3304,30 @@
     const muzzleX = p.x + Math.cos(baseAngle) * barrelDistance;
     const muzzleY = p.y + Math.sin(baseAngle) * barrelDistance;
     const pellets = def.pellets || 1;
+
+    // R 的“五发”按一次实际射击动作计数，散射武器不会一次消耗多个镰刀计数。
+    const scytheShot = consumeScytheShot();
+    if (scytheShot) {
+      spawnScytheBullet(baseAngle, scytheShot.damage, scytheShot.index);
+      addRing(muzzleX, muzzleY, 18, '#ff4058', 0.28, 3);
+      for (let i = 0; i < 10; i += 1) {
+        const a = baseAngle + rand(-0.45, 0.45);
+        spawnParticle(
+          muzzleX,
+          muzzleY,
+          Math.cos(a) * rand(60, 260),
+          Math.sin(a) * rand(60, 260),
+          rand(0.14, 0.34),
+          rand(2, 6),
+          Math.random() < 0.55 ? '#ff4058' : '#ffcf66',
+          true
+        );
+      }
+      addShake(7);
+      audio.play('scythe');
+      if (!infiniteAmmo && p.ammo[key] <= 0) tryReload(true);
+      return;
+    }
 
     for (let i = 0; i < pellets; i += 1) {
       let spread = Math.random() * 2 - 1;
@@ -3101,6 +3404,40 @@
       trail: [{ x: x, y: y }]
     };
     game.bullets.push(bullet);
+  }
+
+  function spawnScytheBullet(angle, damage, index) {
+    if (!game) return;
+    if (game.bullets.length >= MAX_BULLETS) game.bullets.shift();
+    const p = game.player;
+    const speed = 560;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const x = p.x + cos * (p.r + 24);
+    const y = p.y + sin * (p.r + 24);
+    game.bullets.push({
+      x: x,
+      y: y,
+      vx: cos * speed,
+      vy: sin * speed,
+      damage: damage,
+      critical: false,
+      pierce: 0,
+      hits: new Set(),
+      radius: 20,
+      life: 1.45,
+      maxLife: 1.45,
+      color: '#ff334f',
+      glow: '#ff806a',
+      kind: 'scythe',
+      scytheIndex: index,
+      spin: rand(0, TAU),
+      splashDamage: 0,
+      splashRadius: 0,
+      dead: false,
+      smokeTimer: 0,
+      trail: [{ x: x, y: y }]
+    });
   }
 
   function spawnMuzzleFlash(x, y, angle, def) {
@@ -3945,6 +4282,7 @@
     game.enemyBullets = [];
     game.companionBullets = [];
     game.kills += 1;
+    onEnemyKilled();
     game.player.invuln = Math.max(game.player.invuln, 2);
 
     addShake(24);
@@ -4230,6 +4568,7 @@
     }
     addRing(enemy.x, enemy.y, enemy.r, enemy.ring, enemy.type === 'boss' ? 1 : 0.42, enemy.type === 'boss' ? 4 : 2);
     spawnXpOrbs(enemy);
+    onEnemyKilled();
     audio.play('kill');
 
     if (enemy.type === 'boss') {
@@ -4449,6 +4788,7 @@
     game.companion = null;
     game.companionBullets = [];
     game.companionRecruitedThisRun = false;
+    resetPlayerSkillRuntime();
     setState(S.DYING);
     clearInput();
     hideScreens();
@@ -4476,6 +4816,7 @@
 
   function showVictory() {
     if (!game || game.mode !== 'stage' || game.victoryShown) return;
+    closeStatsPanel();
     game.victoryShown = true;
     game.stageState = 'cleared';
     game.banner = null;
@@ -4529,6 +4870,7 @@
 
   function showGameOver() {
     if (!game || game.gameOverShown || state !== S.DYING) return;
+    closeStatsPanel();
     game.gameOverShown = true;
     cleanupEventOnGameOver();
     setState(S.GAMEOVER);
@@ -5338,6 +5680,7 @@
     const p = game.player;
 
     updatePlayerMovement(dt);
+    updatePlayerSkills(dt);
     updateCamera(dt);
     updatePlayerCombat(dt);
     if (state !== S.PLAYING) return;
@@ -6456,6 +6799,11 @@
       const bullet = game.bullets[i];
       if (!isWorldVisible(bullet.x, bullet.y, 80)) continue;
 
+      if (bullet.kind === 'scythe') {
+        drawScytheBullet(bullet);
+        continue;
+      }
+
       if (equippedFx) {
         drawBulletTrail(bullet, equippedFx.trail, bullet.radius);
         const size = playerBulletSpriteSize(bullet);
@@ -6515,6 +6863,88 @@
       ctx.fill();
     }
 
+    ctx.restore();
+  }
+
+  function drawScytheBullet(bullet) {
+    const time = performance.now() * 0.001;
+    const angle = Math.atan2(bullet.vy, bullet.vx);
+    const spin = angle + bullet.spin + time * 13;
+    const pulse = 0.9 + Math.sin(time * 20 + bullet.scytheIndex) * 0.1;
+
+    // 暗红色能量拖尾：比普通子弹更长、更明显。
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (bullet.trail && bullet.trail.length > 1) {
+      ctx.lineCap = 'round';
+      for (let i = 1; i < bullet.trail.length; i += 1) {
+        const a = bullet.trail[i - 1];
+        const b = bullet.trail[i];
+        ctx.globalAlpha = (i / bullet.trail.length) * 0.42;
+        ctx.strokeStyle = i % 2 ? '#ff2f4d' : '#7d1026';
+        ctx.lineWidth = Math.max(2, 8 * (i / bullet.trail.length));
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    const glow = ctx.createRadialGradient(bullet.x, bullet.y, 2, bullet.x, bullet.y, 35);
+    glow.addColorStop(0, 'rgba(255, 230, 200, 0.8)');
+    glow.addColorStop(0.22, 'rgba(255, 52, 76, 0.45)');
+    glow.addColorStop(1, 'rgba(120, 8, 28, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(bullet.x, bullet.y, 35, 0, TAU);
+    ctx.fill();
+
+    ctx.translate(bullet.x, bullet.y);
+    ctx.rotate(spin);
+    ctx.scale(pulse, pulse);
+
+    // 旋转镰刀：暗色刀身 + 高亮红色刃口 + 短柄。
+    ctx.fillStyle = 'rgba(255, 62, 86, 0.24)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 29, 0, TAU);
+    ctx.fill();
+
+    ctx.strokeStyle = '#ff665f';
+    ctx.lineWidth = 3.4;
+    ctx.beginPath();
+    ctx.arc(-2, 0, 21, -1.12, 1.02);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ff314d';
+    ctx.beginPath();
+    ctx.moveTo(-1, -22);
+    ctx.quadraticCurveTo(25, -16, 18, 13);
+    ctx.quadraticCurveTo(13, -2, -1, -9);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#ffd0b0';
+    ctx.beginPath();
+    ctx.moveTo(-1, -22);
+    ctx.quadraticCurveTo(21, -17, 17, 2);
+    ctx.quadraticCurveTo(9, -10, -3, -14);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = '#5b1023';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-5, 4);
+    ctx.lineTo(8, 20);
+    ctx.stroke();
+    ctx.strokeStyle = '#d39b6a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(5, 17);
+    ctx.lineTo(11, 24);
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -6729,72 +7159,84 @@
     drawToasts();
     drawTutorial();
     drawOffscreenBossArrow();
+    refreshSkillBar(false);
+    refreshStatsPanel(false);
   }
 
   function drawDesktopHUD(now) {
     const p = game.player;
-    const x = 24;
-    const y = 20;
-    const w = 344;
-    const h = 98;
-
-    drawPanel(x, y, w, h, 17, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.18)');
-
-    const avatarX = x + 46;
-    const avatarY = y + 49;
+    const form = getCurrentForm();
     const equippedSkin = getEquippedSkin();
-    drawCircularAvatar(getEquippedAvatar(), avatarX, avatarY, 30, equippedSkin.ring, { ringWidth: 2.2 });
+    const w = 360;
+    const h = 96;
+    const x = 24;
+    const y = view.h - 18 - h;
+
+    drawPanel(x, y, w, h, 17, 'rgba(8,15,24,0.88)', 'rgba(255, 123, 111, 0.26)');
+
+    const avatarX = x + 43;
+    const avatarY = y + 48;
+    drawCircularAvatar(getEquippedAvatar(), avatarX, avatarY, 29, equippedSkin.ring, { ringWidth: 2.2 });
     ctx.save();
     ctx.beginPath();
-    ctx.arc(avatarX + 21, avatarY + 21, 11, 0, TAU);
+    ctx.arc(avatarX + 20, avatarY + 21, 10, 0, TAU);
     ctx.fillStyle = '#0a1520';
     ctx.fill();
     ctx.strokeStyle = '#5de1ff';
     ctx.lineWidth = 1.4;
     ctx.stroke();
-    setMonoFont(8, 800);
+    setMonoFont(7.5, 800);
     ctx.fillStyle = '#c9f5ff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Lv.' + game.level, avatarX + 21, avatarY + 21.5);
+    ctx.fillText('Lv.' + game.level, avatarX + 20, avatarY + 21.5);
     ctx.restore();
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    setFont(11, 700);
-    ctx.fillStyle = '#8fa8bb';
-    ctx.fillText('你 · ' + MODE_LABEL[game.mode], x + 88, y + 20);
+    setFont(12, 850);
+    ctx.fillStyle = '#ffe9df';
+    ctx.fillText(form ? form.name : 'EDG', x + 84, y + 19);
+    setMonoFont(8, 700);
+    ctx.fillStyle = '#b7837c';
+    ctx.fillText((form && form.title ? form.title : '角色形态') + ' · ' + MODE_LABEL[game.mode], x + 84, y + 32);
 
-    drawBar(x + 88, y + 29, 228, 15, p.hp / p.maxHp, '#ff536f', '#ffad54', 'rgba(255,255,255,0.08)');
-    setMonoFont(10, 800);
+    drawBar(x + 84, y + 40, 252, 14, p.hp / p.maxHp, '#ff536f', '#ffad54', 'rgba(255,255,255,0.08)');
+    setMonoFont(9, 800);
     ctx.fillStyle = '#fff0f2';
     ctx.textAlign = 'center';
-    ctx.fillText(Math.ceil(p.hp) + ' / ' + Math.ceil(p.maxHp), x + 88 + 114, y + 40.5);
+    ctx.fillText(Math.ceil(p.hp) + ' / ' + Math.ceil(p.maxHp), x + 84 + 126, y + 50.5);
 
-    drawBar(x + 88, y + 53, 228, 7, game.xp / game.xpToNext, '#5de1ff', '#a78bfa', 'rgba(255,255,255,0.07)');
+    drawBar(x + 84, y + 60, 252, 5.5, game.xp / game.xpToNext, '#5de1ff', '#a78bfa', 'rgba(255,255,255,0.07)');
     ctx.textAlign = 'left';
-    setFont(9.5, 600);
-    ctx.fillStyle = '#6e8ea2';
-    ctx.fillText('经验 ' + Math.floor(game.xp) + ' / ' + game.xpToNext, x + 88, y + 71);
+    setFont(8, 600);
+    ctx.fillStyle = '#708a9d';
+    ctx.fillText('EXP ' + Math.floor(game.xp) + ' / ' + game.xpToNext, x + 84, y + 76);
 
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#718da1';
-    ctx.fillText(weaponObjectiveText(), x + 316, y + 71);
-
-    ctx.textAlign = 'left';
-    setFont(9.5, 600);
     ctx.fillStyle = '#5c7487';
-    ctx.fillText('冲刺', x + 88, y + 86);
-    const dashWidth = 110;
+    ctx.fillText('冲刺', x + 84, y + 88);
     const dashMax = Math.max(0.01, 2.4 * p.dashCooldownMult);
     const dashRatio = p.dashCd <= 0 ? 1 : 1 - p.dashCd / dashMax;
-    drawBar(x + 112, y + 80, dashWidth, 4, dashRatio, '#5de1ff', '#66e6a8', 'rgba(255,255,255,0.08)');
+    drawBar(x + 108, y + 83, 48, 4, dashRatio, '#5de1ff', '#66e6a8', 'rgba(255,255,255,0.08)');
     ctx.fillStyle = p.dashCd <= 0 ? '#66e6a8' : '#72899a';
-    ctx.fillText(p.dashCd <= 0 ? '就绪' : p.dashCd.toFixed(1) + 's', x + 229, y + 86);
+    ctx.fillText(p.dashCd <= 0 ? '就绪' : p.dashCd.toFixed(1) + 's', x + 162, y + 88);
+
+    // 简洁的当前技能状态标识，完整状态在底部技能栏与属性面板。
+    const status = [];
+    if (p.skills && p.skills.q.active > 0) status.push({ text: 'Q ' + p.skills.q.active.toFixed(1) + 's', color: '#ff7868' });
+    if (p.skills && p.skills.e.active > 0) status.push({ text: 'E ' + p.skills.e.active.toFixed(1) + 's', color: '#66e6a8' });
+    if (p.skills && p.skills.r.pendingShots > 0) status.push({ text: 'R ' + p.skills.r.pendingShots + '/5', color: '#ffcf66' });
+    status.forEach(function (item, index) {
+      const cx = x + w - 18 - index * 58;
+      drawPanel(cx - 25, y + 7, 52, 17, 8, 'rgba(8, 12, 18, 0.82)', 'rgba(255,255,255,0.08)');
+      ctx.textAlign = 'center';
+      setMonoFont(7.5, 800);
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.text, cx + 1, y + 18.5);
+    });
 
     drawTopStats();
     drawDesktopWeaponPanel();
-    drawDashWide();
   }
 
   function drawTopStats() {
@@ -6828,86 +7270,92 @@
     ctx.fillText(formatNumber(game.kills), x + w * 0.76, y + 47);
 
     if (game.mode === 'stage') {
-      setFont(9, 600);
+      setFont(8.5, 600);
       ctx.fillStyle = '#6f8ca2';
-      ctx.fillText('第 ' + game.stage + ' 关', x + w * 0.5, y + 67);
+      ctx.fillText('第 ' + game.stage + ' 关 · 击杀 ' + game.stageKills + '/' + game.stageTarget, x + w * 0.5, y + 67);
     }
   }
 
   function drawDesktopWeaponPanel() {
     const p = game.player;
-    const w = 272;
-    const h = 96;
+    const w = 300;
+    const h = 118;
     const x = view.w - 24 - w;
-    const y = 76;
-    drawPanel(x, y, w, h, 17, 'rgba(8,15,24,0.84)', 'rgba(103,181,214,0.18)');
+    const y = view.h - 18 - h;
+    drawPanel(x, y, w, h, 17, 'rgba(8,15,24,0.9)', 'rgba(255, 123, 111, 0.22)');
 
     const weapon = WEAPONS[p.weapon];
     const maxMag = weaponMaxMag(p.weapon);
-    drawWeaponIcon(p.weapon, x + 34, y + 34, 28, weapon.color);
+    const infinite = hasInfiniteAmmo();
+    drawWeaponIcon(p.weapon, x + 34, y + 30, 28, weapon.color);
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     setFont(14, 800);
     ctx.fillStyle = '#eaf8ff';
-    ctx.fillText(weapon.name, x + 62, y + 28);
+    ctx.fillText(weapon.name, x + 62, y + 24);
     setMonoFont(8, 700);
     ctx.fillStyle = '#68869a';
-    ctx.fillText('0' + weapon.key + ' · ACTIVE', x + 62, y + 42);
+    ctx.fillText('0' + weapon.key + ' · 武器', x + 62, y + 38);
 
     const ammo = p.ammo[p.weapon];
-    setMonoFont(25, 800);
-    ctx.fillStyle = ammo === 0 ? '#ff5f77' : '#fff3d5';
-    ctx.fillText(String(ammo), x + 62, y + 70);
-    setMonoFont(11, 700);
-    ctx.fillStyle = '#738b9e';
-    ctx.fillText('/ ' + maxMag, x + 62 + ctx.measureText(String(ammo)).width + 5, y + 70);
+    setMonoFont(infinite ? 22 : 25, 800);
+    ctx.fillStyle = infinite ? '#ffcf66' : (ammo === 0 ? '#ff5f77' : '#fff3d5');
+    ctx.fillText(infinite ? '∞' : String(ammo), x + 62, y + 64);
+    setMonoFont(10, 700);
+    ctx.fillStyle = infinite ? '#ffcf66' : '#738b9e';
+    ctx.fillText(infinite ? '无限弹药' : '/ ' + maxMag, x + 62 + ctx.measureText(infinite ? '∞' : String(ammo)).width + 6, y + 64);
 
-    if (p.reloading) {
+    if (infinite) {
+      ctx.textAlign = 'right';
+      setFont(8, 700);
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillText('Q · 极速射击生效中', x + w - 12, y + 64);
+    } else if (p.reloading) {
       const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
-      drawBar(x + 150, y + 62, 98, 5, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
-      setFont(9, 700);
+      drawBar(x + 160, y + 56, 104, 5, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
+      setFont(8.5, 700);
       ctx.fillStyle = '#ffcf66';
       ctx.textAlign = 'right';
-      ctx.fillText('装填中 ' + p.reloadRemaining.toFixed(1) + 's', x + 248, y + 82);
+      ctx.fillText('装填中 ' + p.reloadRemaining.toFixed(1) + 's', x + w - 12, y + 72);
     } else {
-      setFont(9, 600);
+      setFont(8.5, 600);
       ctx.fillStyle = '#607b8e';
       ctx.textAlign = 'right';
-      ctx.fillText('R 换弹', x + 248, y + 82);
+      ctx.fillText('F 换弹', x + w - 12, y + 72);
     }
 
-    const slotsY = y + h + 10;
+    const slotsY = y + 82;
     const gap = 6;
-    const slotW = (w - gap * 4) / 5;
+    const slotW = (w - 24 - gap * 4) / 5;
     for (let i = 0; i < WEAPON_ORDER.length; i += 1) {
       const key = WEAPON_ORDER[i];
       const weaponDef = WEAPONS[key];
       const unlocked = p.unlocked[key];
       const active = p.weapon === key;
-      const sx = x + i * (slotW + gap);
+      const sx = x + 12 + i * (slotW + gap);
       drawPanel(
         sx,
         slotsY,
         slotW,
-        30,
-        7,
-        active ? 'rgba(93,225,255,0.14)' : 'rgba(7,13,21,0.78)',
-        active ? 'rgba(93,225,255,0.55)' : 'rgba(120,167,192,0.13)'
+        27,
+        6,
+        active ? 'rgba(255, 118, 103, 0.15)' : 'rgba(7,13,21,0.78)',
+        active ? 'rgba(255, 145, 124, 0.6)' : 'rgba(120,167,192,0.13)'
       );
       ctx.textAlign = 'left';
-      setMonoFont(8, 800);
-      ctx.fillStyle = active ? '#7deaff' : '#5c7487';
-      ctx.fillText(String(i + 1), sx + 6, slotsY + 12);
-      drawWeaponIcon(key, sx + slotW * 0.5 + 3, slotsY + 17, 15, unlocked ? weaponDef.color : '#445360');
+      setMonoFont(7, 800);
+      ctx.fillStyle = active ? '#ffd0b6' : '#5c7487';
+      ctx.fillText(String(i + 1), sx + 4, slotsY + 10);
+      drawWeaponIcon(key, sx + slotW * 0.5 + 3, slotsY + 15, 13, unlocked ? weaponDef.color : '#445360');
       if (!unlocked) {
         ctx.fillStyle = 'rgba(7,13,21,0.64)';
-        roundRectPath(ctx, sx, slotsY, slotW, 30, 7);
+        roundRectPath(ctx, sx, slotsY, slotW, 27, 6);
         ctx.fill();
-        setFont(8, 700);
+        setFont(7, 700);
         ctx.fillStyle = '#5e7080';
         ctx.textAlign = 'center';
-        ctx.fillText('未解锁', sx + slotW * 0.5, slotsY + 19);
+        ctx.fillText('未解锁', sx + slotW * 0.5, slotsY + 17);
       }
     }
   }
@@ -6942,6 +7390,7 @@
     drawPanel(x, y, w, h, 14, 'rgba(8,15,24,0.84)', 'rgba(103,181,214,0.17)');
 
     const equippedSkin = getEquippedSkin();
+    const compactForm = getCurrentForm();
     drawCircularAvatar(getEquippedAvatar(), x + 31, y + 36, 23, equippedSkin.ring, { ringWidth: 2 });
     ctx.save();
     ctx.beginPath();
@@ -6964,7 +7413,7 @@
     ctx.textBaseline = 'alphabetic';
     setFont(9.5, 700);
     ctx.fillStyle = '#8aa4b6';
-    ctx.fillText('Lv.' + game.level + ' · ' + MODE_LABEL[game.mode], barX, y + 16);
+    ctx.fillText('Lv.' + game.level + ' · ' + (compactForm ? compactForm.name : 'EDG'), barX, y + 16);
 
     drawBar(barX, y + 23, barW, 12, p.hp / p.maxHp, '#ff536f', '#ffad54', 'rgba(255,255,255,0.08)');
     setMonoFont(8, 800);
@@ -7006,14 +7455,24 @@
     setFont(11.5, 800);
     ctx.fillStyle = '#eaf8ff';
     ctx.fillText(WEAPONS[p.weapon].name, wpX + 40, wpY + 17);
-    setMonoFont(17, 800);
-    ctx.fillStyle = p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5';
-    ctx.fillText(String(p.ammo[p.weapon]), wpX + 40, wpY + 38);
+    const compactInfinite = hasInfiniteAmmo();
+    setMonoFont(compactInfinite ? 15 : 17, 800);
+    ctx.fillStyle = compactInfinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
+    ctx.fillText(compactInfinite ? '∞' : String(p.ammo[p.weapon]), wpX + 40, wpY + 38);
     setMonoFont(8.5, 700);
-    ctx.fillStyle = '#70889a';
-    ctx.fillText('/ ' + weaponMaxMag(p.weapon), wpX + 40 + (String(p.ammo[p.weapon]).length * 10) + 4, wpY + 38);
+    ctx.fillStyle = compactInfinite ? '#ffcf66' : '#70889a';
+    ctx.fillText(
+      compactInfinite ? '无限' : '/ ' + weaponMaxMag(p.weapon),
+      wpX + 40 + ((compactInfinite ? '∞' : String(p.ammo[p.weapon])).length * 10) + 4,
+      wpY + 38
+    );
 
-    if (p.reloading) {
+    if (compactInfinite) {
+      ctx.textAlign = 'right';
+      setFont(7.5, 700);
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillText('Q 生效', wpX + wpW - 9, wpY + 48);
+    } else if (p.reloading) {
       const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
       drawBar(wpX + 102, wpY + 33, 56, 4, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
       setFont(7.5, 700);
@@ -7024,7 +7483,7 @@
       ctx.textAlign = 'right';
       setFont(7.5, 600);
       ctx.fillStyle = '#607b8e';
-      ctx.fillText('R 换弹', wpX + wpW - 9, wpY + 48);
+      ctx.fillText('F 换弹', wpX + wpW - 9, wpY + 48);
     }
   }
 
@@ -7210,7 +7669,7 @@
     const compact = view.w < 760;
     const text = hasTouch
       ? '左摇杆移动 · 右摇杆瞄准 · 开火按钮射击'
-      : 'WASD 移动 · 鼠标瞄准/射击 · R 换弹 · 空格冲刺 · 1-5 切枪';
+      : 'WASD 移动 · 鼠标瞄准/射击 · F 换弹 · Q/E/R 技能 · 空格冲刺 · 1-5 切枪';
     const narrow = view.w < 390;
     const y = compact
       ? (game.boss ? (narrow ? 268 : 280) : (narrow ? 226 : 230))
@@ -7260,6 +7719,197 @@
   /* =======================================================
      事件绑定与启动
      ======================================================= */
+  function setupSkillBar() {
+    if (!el.skillBar) return;
+    skillSlots = Array.prototype.slice.call(el.skillBar.querySelectorAll('[data-skill]'));
+    skillSlots.forEach(function (button) {
+      button.addEventListener('pointerdown', function (event) {
+        if (state !== S.PLAYING) return;
+        event.preventDefault();
+        event.stopPropagation();
+        audio.ensure();
+        castSkill(button.getAttribute('data-skill'));
+      }, { passive: false });
+    });
+  }
+
+  function pulseSkillSlot(slot) {
+    if (!el.skillBar) return;
+    const button = el.skillBar.querySelector('[data-skill="' + slot + '"]');
+    if (!button) return;
+    button.classList.remove('is-triggered');
+    void button.offsetWidth;
+    button.classList.add('is-triggered');
+    window.setTimeout(function () {
+      button.classList.remove('is-triggered');
+    }, 340);
+  }
+
+  function refreshSkillBar(force) {
+    if (!game || !el.skillBar) return;
+    const now = performance.now();
+    if (!force && now - lastSkillBarRefresh < 80) return;
+    lastSkillBarRefresh = now;
+
+    const form = getCurrentForm();
+    const implemented = !!(form && form.implemented && form.skills);
+    el.skillBar.classList.toggle('is-locked', !implemented);
+    if (!implemented) {
+      skillSlots.forEach(function (button) {
+        const timer = button.querySelector('.skill-timer');
+        if (timer) timer.textContent = '';
+      });
+      return;
+    }
+
+    skillSlots.forEach(function (button) {
+      const slot = button.getAttribute('data-skill');
+      const def = form.skills[slot];
+      const stateForSlot = game.player.skills ? game.player.skills[slot] : null;
+      if (!def || !stateForSlot) return;
+      const mask = button.querySelector('.skill-cd-mask');
+      const timer = button.querySelector('.skill-timer');
+      button.classList.remove('is-active', 'is-r-ready', 'is-r-charging');
+
+      if (slot === 'q' || slot === 'e') {
+        const active = stateForSlot.active;
+        const cooldown = stateForSlot.cooldown;
+        if (active > 0) {
+          button.classList.add('is-active');
+          mask.style.height = '0%';
+          timer.textContent = active.toFixed(1) + 's';
+        } else if (cooldown > 0) {
+          const ratio = clamp(cooldown / def.cooldown, 0, 1);
+          mask.style.height = (ratio * 100).toFixed(1) + '%';
+          timer.textContent = String(Math.ceil(cooldown));
+        } else {
+          mask.style.height = '0%';
+          timer.textContent = '';
+        }
+        button.title = def.name + (active > 0 ? ' · 持续 ' + active.toFixed(1) + 's' : cooldown > 0 ? ' · 冷却 ' + Math.ceil(cooldown) + 's' : ' · 就绪');
+        return;
+      }
+
+      const pending = stateForSlot.pendingShots;
+      const required = def.requiredKills || 30;
+      const charge = getRCharge();
+      if (pending > 0) {
+        button.classList.add('is-active');
+        mask.style.height = '0%';
+        timer.textContent = pending + '/5';
+        button.title = '终极裁决 · 剩余镰刀弹 ' + pending + ' 发';
+      } else if (charge >= required) {
+        button.classList.add('is-r-ready');
+        mask.style.height = '0%';
+        timer.textContent = required + '/30';
+        button.title = '终极裁决 · 已充能，可释放';
+      } else {
+        button.classList.add('is-r-charging');
+        mask.style.height = ((1 - charge / required) * 100).toFixed(1) + '%';
+        timer.textContent = charge + '/30';
+        button.title = '终极裁决 · 击杀充能 ' + charge + '/' + required;
+      }
+    });
+  }
+
+  function setupStatsPanel() {
+    if (!el.statsPanel) return;
+    statsRows = {};
+    el.statsPanel.querySelectorAll('[data-stat]').forEach(function (node) {
+      statsRows[node.getAttribute('data-stat')] = node;
+    });
+    if (el.statsCloseBtn) el.statsCloseBtn.addEventListener('click', closeStatsPanel);
+  }
+
+  function getLiveStatsData() {
+    if (!game) return {};
+    const p = game.player;
+    const form = getCurrentForm();
+    const weapon = WEAPONS[p.weapon];
+    const stats = getWeaponStats(p.weapon);
+    const baseFireRate = 1 / weapon.fireInterval;
+    const finalFireRate = 1 / stats.fireInterval;
+    const q = p.skills ? p.skills.q : { active: 0, cooldown: 0 };
+    const e = p.skills ? p.skills.e : { active: 0, cooldown: 0 };
+    const r = p.skills ? p.skills.r : { pendingShots: 0 };
+    const hasFormSkills = !!(form && form.implemented && form.skills);
+    const qState = !hasFormSkills ? '未开放' : q.active > 0 ? '激活 ' + q.active.toFixed(1) + 's' : q.cooldown > 0 ? '冷却 ' + Math.ceil(q.cooldown) + 's' : '就绪';
+    const eState = !hasFormSkills ? '未开放' : e.active > 0 ? '激活 ' + e.active.toFixed(1) + 's' : e.cooldown > 0 ? '冷却 ' + Math.ceil(e.cooldown) + 's' : '就绪';
+    const charge = getRCharge();
+    const required = (getFormSkill('r', 'edg') || {}).requiredKills || 30;
+    const activeDuration = hasFormSkills ? Math.max(q.active || 0, e.active || 0) : 0;
+    return {
+      hp: Math.ceil(p.hp) + ' / ' + Math.ceil(p.maxHp),
+      level: String(game.level),
+      xp: Math.floor(game.xp) + ' / ' + game.xpToNext,
+      move: Math.round(p.baseSpeed * p.moveSpeedMult) + ' （基础 ' + Math.round(p.baseSpeed) + '）',
+      dash: (2.4 * p.dashCooldownMult).toFixed(1) + 's',
+      form: form ? form.name : '—',
+      weapon: weapon.name,
+      baseDamage: String(weapon.damage),
+      finalDamage: stats.damage.toFixed(1),
+      critChance: (stats.critChance * 100).toFixed(1) + '%',
+      critDamage: stats.critMultiplier.toFixed(2) + '×',
+      baseFireRate: baseFireRate.toFixed(2) + ' /s',
+      finalFireRate: finalFireRate.toFixed(2) + ' /s',
+      mag: stats.maxMag + ' （基础 ' + weapon.mag + '）',
+      reserve: '—（弹匣制）',
+      reload: stats.reloadTime.toFixed(2) + 's',
+      pierce: stats.pierce + ' （基础 ' + weapon.pierce + '）',
+      ammo: hasInfiniteAmmo() ? '∞' : String(p.ammo[p.weapon]) + ' / ' + stats.maxMag,
+      damageBonus: '+' + Math.round((p.damageMult - 1) * 100) + '%',
+      fireRateBonus: '+' + Math.round((finalFireRate / baseFireRate - 1) * 100) + '%',
+      magBonus: '+' + p.magBonus,
+      reloadBonus: '+' + Math.round((1 / p.reloadMult - 1) * 100) + '%',
+      critBonus: '+' + Math.round((p.critChance - 0.06) * 100) + '%',
+      critDamageBonus: '+' + Math.round((p.critMultiplier - 2) * 100) + '%',
+      qState: qState,
+      eState: eState,
+      rCharge: hasFormSkills ? charge + ' / ' + required : '—',
+      rShots: hasFormSkills ? (r.pendingShots || 0) + ' / 5' : '—',
+      skillDuration: hasFormSkills ? activeDuration.toFixed(1) + 's' : '—'
+    };
+  }
+
+  function refreshStatsPanel(force) {
+    if (!statsPanelOpen || !game || !el.statsPanel) return;
+    const now = performance.now();
+    if (!force && now - lastStatsPanelRefresh < 120) return;
+    lastStatsPanelRefresh = now;
+    const data = getLiveStatsData();
+    Object.keys(data).forEach(function (key) {
+      if (statsRows[key]) statsRows[key].textContent = data[key];
+    });
+    const form = getCurrentForm();
+    if (el.statsFormName) el.statsFormName.textContent = form ? form.name : '—';
+    if (el.statsFormTitle) el.statsFormTitle.textContent = form ? form.title : '';
+  }
+
+  function openStatsPanel(fromPause) {
+    if (!game || !el.statsPanel) return;
+    if (fromPause) {
+      if (state === S.PLAYING) pauseGame();
+      if (state !== S.PAUSED) return;
+    } else if (state !== S.PLAYING && state !== S.PAUSED) {
+      return;
+    }
+    statsPanelOpen = true;
+    el.statsPanel.hidden = false;
+    document.body.classList.add('stats-open');
+    refreshStatsPanel(true);
+  }
+
+  function closeStatsPanel() {
+    statsPanelOpen = false;
+    if (el.statsPanel) el.statsPanel.hidden = true;
+    document.body.classList.remove('stats-open');
+  }
+
+  function toggleStatsPanel() {
+    if (statsPanelOpen) closeStatsPanel();
+    else openStatsPanel(false);
+  }
+
   function bindUI() {
     el.startSurvivalBtn.addEventListener('click', function () {
       audio.ensure();
@@ -7281,6 +7931,8 @@
       if (state === S.PLAYING) pauseGame();
     });
 
+    setupSkillBar();
+    setupStatsPanel();
     el.resumeBtn.addEventListener('click', resumeGame);
     el.pauseRestartBtn.addEventListener('click', restartGame);
     el.pauseMenuBtn.addEventListener('click', returnToMenu);
@@ -7293,6 +7945,7 @@
     if (el.menuInventoryBtn) el.menuInventoryBtn.addEventListener('click', function () { openStore('inventory', 'menu'); });
     if (el.pauseShopBtn) el.pauseShopBtn.addEventListener('click', function () { openStore('shop', 'pause'); });
     if (el.pauseInventoryBtn) el.pauseInventoryBtn.addEventListener('click', function () { openStore('inventory', 'pause'); });
+    if (el.pauseStatsBtn) el.pauseStatsBtn.addEventListener('click', function () { openStatsPanel(true); });
     if (el.shopBackBtn) el.shopBackBtn.addEventListener('click', closeStore);
     if (el.inventoryBackBtn) el.inventoryBackBtn.addEventListener('click', closeStore);
     if (el.shopCards) el.shopCards.addEventListener('click', handleSkinAction);
