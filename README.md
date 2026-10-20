@@ -189,7 +189,11 @@ npx serve .
 
 随行伙伴：
 
-- 解锁后保存在 localStorage，新开局自动恢复。
+- 永久存档中的 `wuchaoyangCompanionUnlocked` 只记录历史剧情/好感进度，**不会在新对局自动召唤吴朝阳**。
+- 每一局都必须在第三关事件中重新选择交流 → 射击，使本局招募状态成立，吴朝阳才会加入。
+- 本局是否已招募由 `game.companionRecruitedThisRun` 独立管理；`game.companion` 才是当前实体。
+- 死亡、重开、返回主菜单后，本局伙伴、伙伴子弹和招募状态都会重置。
+- 暂停、打开商城、关闭商城并继续同一局，不会清除已招募伙伴。
 - 跟随玩家、不阻挡移动、无生命值、不会被敌人锁定。
 - 自动攻击最近敌人，约 1.6 发/秒；单发伤害 = 当前关卡等级 × 10。
 - 只使用独立子弹与计时器，不覆盖玩家射击逻辑。
@@ -198,12 +202,24 @@ npx serve .
 存档字段（兼容旧存档）：
 
 - `wuchaoyangAffinity`：好感度 0–100
-- `wuchaoyangCompanionUnlocked`：是否解锁随行伙伴
+- `wuchaoyangCompanionUnlocked`：历史解锁记录；**不等于永久召唤**
 - `wuchaoyangBossRewardClaimed`：Boss 首次金币奖励是否已领取
 - `wuchaoyangLastReward`：最近一次临时词条记录（不会在重启后自动应用）
 - `wuchaoyangBossKills`：Boss 击败次数
 
 事件是否已触发属于单局状态，保存在当前 `game` 流程中；死亡、重开或返回主菜单后重置。
+
+## 手机端多点触控
+
+移动摇杆、瞄准摇杆、射击按钮和动作按钮都使用 Pointer Events 和独立 `pointerId`：
+
+- 摇杆只清除自己 `pointerId` 对应的移动/瞄准状态。
+- 射击按钮记录 `firePointerId`，只有按下射击的那根手指抬起才停止射击。
+- 闪避、换弹、切枪在 `pointerdown` 立即触发，不依赖可能被多指手势吞掉的 `click`。
+- 一个手指抬起不会调用全局清理，也不影响其他仍按住的操作。
+- `pointercancel`、暂停、死亡、重开时会释放摇杆捕获并清理全部输入。
+- 控制区域和按钮使用局部 `touch-action: none`，不需要对整个页面禁用浏览器功能。
+- 电脑端键盘、鼠标、数字键切枪、空格冲刺逻辑不变。
 
 ## 素材说明
 
@@ -231,4 +247,4 @@ npx serve .
 4. 在商城和仓库中应能看到五张不同的皮肤图片；装备不同皮肤后，游戏角色和左上角 HUD 会同步变化。
 5. 如果状态为 `"fallback"`，控制台会给出失败 URL、重试次数以及 HTTP/网络错误；请确认 `assets` 目录与 `index.html` 一起部署，文件名大小写完全一致。
 
-> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-4`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。
+> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-5`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。

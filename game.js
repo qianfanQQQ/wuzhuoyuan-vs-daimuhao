@@ -801,8 +801,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-4';
-  const BULLET_VERSION = '20261020-4';
+  const AVATAR_VERSION = '20261020-5';
+  const BULLET_VERSION = '20261020-5';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1345,6 +1345,7 @@
       active: false
     },
     fireHeld: false,
+    firePointerId: null,
     usingMouse: !hasTouch
   };
 
@@ -1842,6 +1843,7 @@
       WUCHAOYANG_EVENT.affinity.max
     );
     save.wuchaoyangCompanionUnlocked = true;
+    game.companionRecruitedThisRun = true;
     persistSave();
     updateEventAffinityDisplay();
     el.eventScreen.classList.remove('is-hostile');
@@ -1907,8 +1909,9 @@
   }
 
   function ensureCompanion() {
-    if (!game || game.player.dead) return;
-    if (!save.wuchaoyangCompanionUnlocked) return;
+    if (!game || game.mode !== 'stage' || game.player.dead) return;
+    // 永久解锁只代表历史剧情进度，不能直接召唤；本局必须在事件中重新招募。
+    if (!game.companionRecruitedThisRun) return;
     if (!game.companion) game.companion = createCompanion(game.player);
   }
 
@@ -1989,6 +1992,7 @@
       game.enemyBullets = [];
       game.companion = null;
       game.companionBullets = [];
+      game.companionRecruitedThisRun = false;
     }
     if (el.eventScreen) el.eventScreen.classList.remove('is-hostile', 'is-affection');
   }
@@ -2156,6 +2160,16 @@
   function clearInput() {
     input.keys.clear();
     input.mouse.down = false;
+    if (input.firePointerId !== null && el.fireBtn) {
+      try {
+        if (el.fireBtn.hasPointerCapture && el.fireBtn.hasPointerCapture(input.firePointerId)) {
+          el.fireBtn.releasePointerCapture(input.firePointerId);
+        }
+      } catch (error) {
+        /* 忽略已释放的指针 */
+      }
+    }
+    input.firePointerId = null;
     input.fireHeld = false;
     resetAllJoysticks();
     if (el.fireBtn) el.fireBtn.classList.remove('is-pressed');
@@ -2248,15 +2262,19 @@
   function setupFireButton() {
     if (!el.fireBtn) return;
     function stopFire(event) {
+      if (event && input.firePointerId !== null && event.pointerId !== input.firePointerId) return;
       input.fireHeld = false;
+      input.firePointerId = null;
       el.fireBtn.classList.remove('is-pressed');
       if (event) event.preventDefault();
     }
     el.fireBtn.addEventListener('pointerdown', function (event) {
       if (state !== S.PLAYING) return;
+      if (input.firePointerId !== null) return;
       event.preventDefault();
       event.stopPropagation();
       audio.ensure();
+      input.firePointerId = event.pointerId;
       input.fireHeld = true;
       el.fireBtn.classList.add('is-pressed');
       try {
@@ -2415,24 +2433,20 @@
       window.setTimeout(resizeCanvas, 180);
     });
 
-    el.reloadBtn.addEventListener('click', function () {
-      if (state === S.PLAYING) {
+    function bindTouchAction(button, action) {
+      if (!button) return;
+      button.addEventListener('pointerdown', function (event) {
+        if (state !== S.PLAYING) return;
+        event.preventDefault();
+        event.stopPropagation();
         audio.ensure();
-        tryReload(false);
-      }
-    });
-    el.dashBtn.addEventListener('click', function () {
-      if (state === S.PLAYING) {
-        audio.ensure();
-        tryDash();
-      }
-    });
-    el.switchBtn.addEventListener('click', function () {
-      if (state === S.PLAYING) {
-        audio.ensure();
-        cycleWeapon();
-      }
-    });
+        action();
+      }, { passive: false });
+    }
+
+    bindTouchAction(el.reloadBtn, function () { tryReload(false); });
+    bindTouchAction(el.dashBtn, tryDash);
+    bindTouchAction(el.switchBtn, cycleWeapon);
   }
 
   /* =======================================================
@@ -2542,6 +2556,7 @@
       enemyBullets: [],
       companionBullets: [],
       companion: null,
+      companionRecruitedThisRun: false,
       eventBoss: null,
       eventBossActive: false,
       eventBossDefeated: false,
@@ -2586,9 +2601,6 @@
       coinsEarnedRun: 0,
       victoryShown: false
     };
-    if (save.wuchaoyangCompanionUnlocked) {
-      g.companion = createCompanion(g.player);
-    }
     return g;
   }
 
@@ -4436,6 +4448,7 @@
     }
     game.companion = null;
     game.companionBullets = [];
+    game.companionRecruitedThisRun = false;
     setState(S.DYING);
     clearInput();
     hideScreens();
