@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#06090f">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="《吴卓远大战代牧豪》是一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。WASD 移动、鼠标瞄准射击，解锁手枪、冲锋枪、霰弹枪、狙击枪和火箭筒，在无限生存与关卡挑战中击败精英追兵和 BOSS。支持电脑与手机，免费在线玩。">
-  <meta name="keywords" content="吴卓远大战代牧豪,吴卓远,代牧豪,2D射击游戏,俯视角射击,网页游戏,在线小游戏,HTML5游戏,Canvas游戏,生存射击,无限生存,枪战游戏,BOSS战,免费网页游戏">
+  <meta name="description" content="《吴卓远大战代牧豪》是一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。WASD 移动、鼠标瞄准射击，解锁手枪、冲锋枪、霰弹枪、狙击枪和火箭筒，在无限生存与关卡挑战中击败精英追兵和 BOSS。通关赚取金币，解锁并装备五款角色皮肤。支持电脑与手机，免费在线玩。">
+  <meta name="keywords" content="吴卓远大战代牧豪,吴卓远,代牧豪,2D射击游戏,俯视角射击,网页游戏,在线小游戏,HTML5游戏,Canvas游戏,生存射击,无限生存,枪战游戏,BOSS战,金币系统,皮肤商城,角色皮肤,免费网页游戏">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="googlebot" content="index,follow,max-image-preview:large">
   <meta name="author" content="吴卓远大战代牧豪">
@@ -23,7 +23,7 @@
   <meta property="og:site_name" content="吴卓远大战代牧豪">
   <meta property="og:locale" content="zh_CN">
   <meta property="og:title" content="吴卓远大战代牧豪 — 在线 2D 俯视角生存射击游戏">
-  <meta property="og:description" content="拿好枪，升级火力，别被好兄弟追上。五种枪械、精英敌人、BOSS 战和随机升级，电脑与手机都能免费在线玩。">
+  <meta property="og:description" content="拿好枪，升级火力，别被好兄弟追上。五种枪械、精英敌人、BOSS 战、金币商城与五款角色皮肤，电脑与手机都能免费在线玩。">
   <meta property="og:image" content="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/assets/og-cover.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -31,15 +31,15 @@
   <meta property="og:url" content="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="吴卓远大战代牧豪 — 在线 2D 俯视角生存射击游戏">
-  <meta name="twitter:description" content="五种枪械、精英敌人、BOSS 战和随机升级。打开浏览器，别被好兄弟追上。">
+  <meta name="twitter:description" content="五种枪械、精英敌人、BOSS 战、随机升级和五款可装备皮肤。打开浏览器，别被好兄弟追上。">
   <meta name="twitter:image" content="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/assets/og-cover.png">
 
   <link id="canonicalLink" rel="canonical" href="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/">
   <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="preload" as="image" href="assets/player.png?v=20261019-3" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/enemy.png?v=20261019-3" fetchpriority="high">
-  <link rel="stylesheet" href="style.css?v=20261019-3">
+  <link rel="preload" as="image" href="assets/skins/edg.png?v=20261020-1" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/enemy.png?v=20261020-1" fetchpriority="high">
+  <link rel="stylesheet" href="style.css?v=20261020-1">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b1119' stroke='%235de1ff' stroke-width='4'/%3E%3Ccircle cx='32' cy='24' r='10' fill='%235de1ff'/%3E%3Cpath d='M14 55c2-13 9-19 18-19s16 6 18 19' fill='%235de1ff'/%3E%3C/svg%3E">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
@@ -61,7 +61,7 @@
         "name": "吴卓远大战代牧豪",
         "alternateName": "Wu Zhuoyuan vs. Dai Muhao",
         "url": "https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/",
-        "description": "《吴卓远大战代牧豪》是一款 HTML5 Canvas 制作的 2D 俯视角生存射击网页游戏。玩家可以使用五种枪械、冲刺、换弹和随机升级，在无限生存与关卡挑战中对抗精英追兵和 BOSS。",
+        "description": "《吴卓远大战代牧豪》是一款 HTML5 Canvas 制作的 2D 俯视角生存射击网页游戏。玩家可以使用五种枪械、冲刺、换弹和随机升级，在无限生存与关卡挑战中对抗精英追兵和 BOSS；通关赚取金币，解锁并装备五款角色皮肤。",
         "genre": ["Survival", "Shooter", "Top-down shooter", "Action"],
         "gamePlatform": ["Web browser", "PC", "Mobile web"],
         "applicationCategory": "Game",
@@ -151,6 +151,16 @@
               <span class="mode-copy"><strong>关卡挑战</strong><small>完成击杀目标，每三关迎战 BOSS</small></span>
               <span class="button-arrow" aria-hidden="true">→</span>
             </button>
+            <div class="menu-store-row">
+              <button id="menuShopBtn" class="btn btn-store-entry" type="button">
+                <span class="store-entry-icon" aria-hidden="true">◆</span>
+                <span class="store-entry-copy"><strong>皮肤商城</strong><small>金币解锁新外观</small></span>
+              </button>
+              <button id="menuInventoryBtn" class="btn btn-store-entry" type="button">
+                <span class="store-entry-icon" aria-hidden="true">▣</span>
+                <span class="store-entry-copy"><strong>我的仓库</strong><small>装备已拥有皮肤</small></span>
+              </button>
+            </div>
             <button id="instructionsBtn" class="btn btn-ghost" type="button">操作说明 / FIELD MANUAL</button>
           </div>
         </div>
@@ -159,6 +169,16 @@
           <div class="panel-heading">
             <span>作战档案</span>
             <span class="panel-tag">LOCAL</span>
+          </div>
+          <div class="player-meta">
+            <div class="wallet-tile">
+              <span class="coin-orb" aria-hidden="true">◆</span>
+              <div class="wallet-copy"><span>金币余额</span><strong id="menuCoins">0</strong></div>
+            </div>
+            <div class="equipped-tile">
+              <img id="menuSkinImage" src="assets/skins/edg.png?v=20261020-1" alt="当前装备皮肤">
+              <div class="wallet-copy"><span>当前皮肤</span><strong id="menuSkinName">EDG</strong></div>
+            </div>
           </div>
           <div class="record-grid">
             <div class="record-item">
@@ -185,12 +205,12 @@
             <span><kbd>空格</kbd> 冲刺</span>
             <span><kbd>ESC</kbd> 暂停</span>
           </div>
-          <p class="save-note">记录与音效设置自动保存在本机 localStorage，不上传任何数据。</p>
+          <p class="save-note">战绩、金币、皮肤与音效设置自动保存在本机 localStorage，不上传任何数据。</p>
         </aside>
       </div>
       <div class="menu-footer">
         <span>把追你的兄弟，统统劝退。</span>
-        <span class="menu-footer-version">v1.0 · CANVAS EDITION</span>
+        <span class="menu-footer-version">v1.1 · SKIN UPDATE</span>
       </div>
     </section>
 
@@ -217,6 +237,10 @@
           <div><span>存活时间</span><strong id="pauseTime">00:00</strong></div>
           <div><span>击败敌人</span><strong id="pauseKills">0</strong></div>
           <div><span>当前等级</span><strong id="pauseLevel">1</strong></div>
+        </div>
+        <div class="pause-store-actions">
+          <button id="pauseShopBtn" class="btn btn-ghost" type="button">皮肤商城</button>
+          <button id="pauseInventoryBtn" class="btn btn-ghost" type="button">我的仓库</button>
         </div>
         <div class="panel-actions">
           <button id="resumeBtn" class="btn btn-primary" type="button">继续游戏</button>
@@ -254,6 +278,52 @@
           <button id="gameOverMenuBtn" class="btn btn-secondary" type="button">返回主菜单</button>
         </div>
         <p class="result-quote">“下次，别追了。”</p>
+      </div>
+    </section>
+
+    <!-- ===================== 皮肤商城 ===================== -->
+    <section id="shopScreen" class="screen overlay-screen store-screen" aria-label="皮肤商城">
+      <div class="store-shell">
+        <header class="store-header">
+          <button id="shopBackBtn" class="icon-button store-back" type="button" aria-label="返回上一级">←</button>
+          <div class="store-heading">
+            <p class="eyebrow">SKIN STORE · 外观收藏</p>
+            <h2>皮肤商城</h2>
+            <p>使用关卡金币解锁角色外观。皮肤只改变外观，不影响生命、碰撞、枪械或技能。</p>
+          </div>
+          <div class="store-wallet">
+            <span class="coin-orb" aria-hidden="true">◆</span>
+            <div><span>金币余额</span><strong id="shopCoins">0</strong></div>
+          </div>
+        </header>
+        <div id="shopMessage" class="store-message" aria-live="polite"></div>
+        <div id="shopCards" class="store-grid" aria-label="皮肤商品列表"></div>
+        <p class="store-footnote">默认皮肤 EDG 永久拥有。购买后需要手动点击“装备”，不会自动覆盖当前外观。</p>
+      </div>
+    </section>
+
+    <!-- ===================== 皮肤仓库 ===================== -->
+    <section id="inventoryScreen" class="screen overlay-screen store-screen" aria-label="皮肤仓库">
+      <div class="store-shell">
+        <header class="store-header">
+          <button id="inventoryBackBtn" class="icon-button store-back" type="button" aria-label="返回上一级">←</button>
+          <div class="store-heading">
+            <p class="eyebrow">SKIN VAULT · 我的收藏</p>
+            <h2>我的仓库</h2>
+            <p>这里只显示已经拥有的皮肤。切换装备不消耗金币。</p>
+          </div>
+          <div class="store-wallet">
+            <span class="coin-orb" aria-hidden="true">◆</span>
+            <div><span>金币余额</span><strong id="inventoryCoins">0</strong></div>
+          </div>
+        </header>
+        <div class="inventory-summary">
+          <div><span>已拥有皮肤</span><strong id="inventoryCount">1 / 5</strong></div>
+          <div><span>当前装备</span><strong id="inventoryEquipped">EDG</strong></div>
+        </div>
+        <div id="inventoryMessage" class="store-message" aria-live="polite"></div>
+        <div id="inventoryCards" class="store-grid inventory-grid" aria-label="已拥有皮肤列表"></div>
+        <p class="store-footnote">未拥有的皮肤不会出现在仓库中。装备状态会自动保存到本机。</p>
       </div>
     </section>
 
@@ -330,6 +400,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261019-3" defer></script>
+  <script src="game.js?v=20261020-1" defer></script>
 </body>
 </html>

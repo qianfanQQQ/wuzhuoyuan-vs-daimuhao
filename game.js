@@ -175,6 +175,86 @@
     }
   };
 
+  /* =======================================================
+     皮肤配置（价格、图片、显示信息集中管理）
+     ======================================================= */
+  const DEFAULT_SKIN_ID = 'edg';
+  const SKINS = [
+    {
+      id: 'edg',
+      name: 'EDG',
+      price: 0,
+      file: 'edg.png',
+      accent: '#f2c56a',
+      ring: '#ffd166',
+      fallbackColorA: '#4b3a16',
+      fallbackColorB: '#f2c56a',
+      badge: '默认',
+      desc: '黑色 EDG 队服，默认拥有的经典外观。'
+    },
+    {
+      id: 'edg2026',
+      name: 'EDG2026冠军赛限定',
+      price: 500,
+      file: 'edg-2026-champion.png',
+      accent: '#ff6578',
+      ring: '#ff7b87',
+      fallbackColorA: '#5f1422',
+      fallbackColorB: '#ff7b87',
+      badge: '限定',
+      desc: 'EDG2026 冠军赛限定造型，纪念冠军之夜。'
+    },
+    {
+      id: 'korean',
+      name: '韩国欧巴',
+      price: 1000,
+      file: 'korean-oppa.png',
+      accent: '#5de1ff',
+      ring: '#7deaff',
+      fallbackColorA: '#174454',
+      fallbackColorB: '#5de1ff',
+      badge: '潮流',
+      desc: '清爽蓝底证件照风格，干净利落的韩系外观。'
+    },
+    {
+      id: 'bride',
+      name: '纯白花嫁',
+      price: 2000,
+      file: 'pure-white-bride.png',
+      accent: '#ffc7dd',
+      ring: '#ffd7e8',
+      fallbackColorA: '#623548',
+      fallbackColorB: '#ffc7dd',
+      badge: '珍藏',
+      desc: '纯白婚纱与花海背景，属于特殊日子的珍藏造型。'
+    },
+    {
+      id: 'nun',
+      name: '特蕾拉修女',
+      price: 3500,
+      file: 'theresa-nun.png',
+      accent: '#b8a2ff',
+      ring: '#d8c7ff',
+      fallbackColorA: '#2c2344',
+      fallbackColorB: '#b8a2ff',
+      badge: '传说',
+      desc: '黑裙与烛光教堂，气场全开的特蕾拉修女造型。'
+    }
+  ];
+  const SKIN_BY_ID = SKINS.reduce(function (map, skin) {
+    map[skin.id] = skin;
+    return map;
+  }, Object.create(null));
+
+  // 关卡金币公式集中在这里，后续只改这两个数字即可。
+  const STAGE_COIN_BASE = 100;
+  const STAGE_COIN_STEP = 50;
+
+  function stageClearCoinReward(stage) {
+    const level = Math.max(1, Math.floor(Number(stage) || 1));
+    return STAGE_COIN_BASE + STAGE_COIN_STEP * (level - 1);
+  }
+
   const hasCoarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
   const hasFinePointer = !!(window.matchMedia && window.matchMedia('(pointer: fine)').matches);
   const hasTouch = hasCoarsePointer || (('ontouchstart' in window) && !hasFinePointer);
@@ -277,28 +357,51 @@
     maxLevel: 1,
     totalKills: 0,
     highestStage: 0,
-    sfx: true
+    sfx: true,
+    coins: 0,
+    ownedSkins: [DEFAULT_SKIN_ID],
+    equippedSkin: DEFAULT_SKIN_ID
   };
 
   function normalizeSave(raw) {
-    const result = Object.assign({}, DEFAULT_SAVE);
+    const result = Object.assign({}, DEFAULT_SAVE, {
+      ownedSkins: [DEFAULT_SKIN_ID],
+      equippedSkin: DEFAULT_SKIN_ID
+    });
     if (!raw || typeof raw !== 'object') return result;
     if (Number.isFinite(Number(raw.highScore))) result.highScore = Math.max(0, Math.floor(Number(raw.highScore)));
     if (Number.isFinite(Number(raw.maxTime))) result.maxTime = Math.max(0, Math.floor(Number(raw.maxTime)));
     if (Number.isFinite(Number(raw.maxLevel))) result.maxLevel = Math.max(1, Math.floor(Number(raw.maxLevel)));
     if (Number.isFinite(Number(raw.totalKills))) result.totalKills = Math.max(0, Math.floor(Number(raw.totalKills)));
     if (Number.isFinite(Number(raw.highestStage))) result.highestStage = Math.max(0, Math.floor(Number(raw.highestStage)));
+    if (Number.isFinite(Number(raw.coins))) result.coins = Math.max(0, Math.floor(Number(raw.coins)));
     result.sfx = raw.sfx !== false;
+
+    const owned = [];
+    if (Array.isArray(raw.ownedSkins)) {
+      raw.ownedSkins.forEach(function (id) {
+        if (typeof id === 'string' && SKIN_BY_ID[id] && owned.indexOf(id) === -1) {
+          owned.push(id);
+        }
+      });
+    }
+    if (owned.indexOf(DEFAULT_SKIN_ID) === -1) owned.unshift(DEFAULT_SKIN_ID);
+    result.ownedSkins = owned;
+    result.equippedSkin = (
+      typeof raw.equippedSkin === 'string' &&
+      SKIN_BY_ID[raw.equippedSkin] &&
+      owned.indexOf(raw.equippedSkin) !== -1
+    ) ? raw.equippedSkin : DEFAULT_SKIN_ID;
     return result;
   }
 
   function loadSave() {
     try {
       const text = window.localStorage.getItem(SAVE_KEY);
-      if (!text) return Object.assign({}, DEFAULT_SAVE);
+      if (!text) return normalizeSave(null);
       return normalizeSave(JSON.parse(text));
     } catch (error) {
-      return Object.assign({}, DEFAULT_SAVE);
+      return normalizeSave(null);
     }
   }
 
@@ -509,6 +612,20 @@
           this.tone(440, 660, 0.16, 'triangle', 0.06);
           this.tone(660, 880, 0.2, 'triangle', 0.055, 0.13);
           break;
+        case 'coin':
+          this.tone(880, 1180, 0.09, 'triangle', 0.055);
+          this.tone(1180, 1560, 0.12, 'triangle', 0.045, 0.08);
+          this.tone(1560, 1760, 0.09, 'sine', 0.025, 0.16);
+          break;
+        case 'purchase':
+          this.tone(523.25, 523.25, 0.11, 'triangle', 0.05);
+          this.tone(659.25, 659.25, 0.11, 'triangle', 0.05, 0.08);
+          this.tone(1046.5, 1400, 0.2, 'sine', 0.04, 0.16);
+          break;
+        case 'equip':
+          this.tone(420, 760, 0.08, 'triangle', 0.05);
+          this.tone(760, 980, 0.1, 'sine', 0.03, 0.06);
+          break;
         case 'switch':
           this.tone(320, 220, 0.05, 'square', 0.03);
           break;
@@ -532,11 +649,12 @@
 
   /* =======================================================
      头像素材加载
-     严格使用 assets/player.png 与 assets/enemy.png。
+     敌人固定使用 assets/enemy.png；玩家按当前装备皮肤读取
+     assets/skins/*.png，旧版 player.png 仅保留兼容。
      路径以 game.js 的真实位置为基准解析，避免页面被部署到
      子目录或从不同入口打开时把 assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261019-3';
+  const AVATAR_VERSION = '20261020-1';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -765,6 +883,46 @@
     enemy: createAvatarEntry('enemy', 'enemy.png', '友', '#7d2438', '#ff6b7d')
   };
 
+  // 五款皮肤各自加载自己的图片；游戏内玩家始终从这里读取当前装备皮肤。
+  const skinAvatars = {};
+  SKINS.forEach(function (skin) {
+    const type = 'skin_' + skin.id;
+    avatarDebug[type] = {
+      label: skin.name,
+      file: 'assets/skins/' + skin.file,
+      status: 'loading',
+      url: '',
+      attempts: 0,
+      width: 0,
+      height: 0,
+      error: null
+    };
+    skinAvatars[skin.id] = createAvatarEntry(
+      type,
+      'skins/' + skin.file,
+      skin.name.charAt(0),
+      skin.fallbackColorA,
+      skin.fallbackColorB
+    );
+  });
+
+  function getSkinById(id) {
+    return SKIN_BY_ID[id] || null;
+  }
+
+  function getEquippedSkin() {
+    return getSkinById(save.equippedSkin) || SKINS[0];
+  }
+
+  function getEquippedAvatar() {
+    const skin = getEquippedSkin();
+    return skinAvatars[skin.id] || avatars.player;
+  }
+
+  function skinImageSrc(skin) {
+    return buildAvatarUrl('skins/' + skin.file);
+  }
+
   // 一次性生成头像底部压暗层，避免每个敌人每帧创建渐变，保证长时间运行稳定。
   const avatarShadeCanvas = document.createElement('canvas');
   avatarShadeCanvas.width = 128;
@@ -824,6 +982,23 @@
     bestTime: $('bestTime'),
     bestLevel: $('bestLevel'),
     totalKills: $('totalKills'),
+    menuCoins: $('menuCoins'),
+    menuSkinImage: $('menuSkinImage'),
+    menuSkinName: $('menuSkinName'),
+    menuShopBtn: $('menuShopBtn'),
+    menuInventoryBtn: $('menuInventoryBtn'),
+    shopCards: $('shopCards'),
+    shopCoins: $('shopCoins'),
+    shopBackBtn: $('shopBackBtn'),
+    shopMessage: $('shopMessage'),
+    inventoryCards: $('inventoryCards'),
+    inventoryCoins: $('inventoryCoins'),
+    inventoryCount: $('inventoryCount'),
+    inventoryEquipped: $('inventoryEquipped'),
+    inventoryBackBtn: $('inventoryBackBtn'),
+    inventoryMessage: $('inventoryMessage'),
+    pauseShopBtn: $('pauseShopBtn'),
+    pauseInventoryBtn: $('pauseInventoryBtn'),
     fireBtn: $('fireBtn'),
     reloadBtn: $('reloadBtn'),
     dashBtn: $('dashBtn'),
@@ -838,7 +1013,9 @@
     menu: $('menuScreen'),
     upgrade: $('upgradeScreen'),
     pause: $('pauseScreen'),
-    gameover: $('gameOverScreen')
+    gameover: $('gameOverScreen'),
+    shop: $('shopScreen'),
+    inventory: $('inventoryScreen')
   };
 
   const view = {
@@ -850,6 +1027,9 @@
   let state = S.MENU;
   let game = null;
   let lastFrameTime = performance.now();
+  let activeStore = null;
+  let storeReturn = null;
+  let skinActionLock = false;
 
   const input = {
     keys: new Set(),
@@ -939,11 +1119,260 @@
     el.soundToggle.setAttribute('aria-pressed', String(save.sfx));
   }
 
+  function refreshWalletDisplays() {
+    const text = formatNumber(save.coins);
+    if (el.menuCoins) el.menuCoins.textContent = text;
+    if (el.shopCoins) el.shopCoins.textContent = text;
+    if (el.inventoryCoins) el.inventoryCoins.textContent = text;
+  }
+
+  function refreshMenuSkin() {
+    const skin = getEquippedSkin();
+    if (el.menuSkinImage) {
+      el.menuSkinImage.src = skinImageSrc(skin);
+      el.menuSkinImage.alt = '当前装备皮肤：' + skin.name;
+    }
+    if (el.menuSkinName) el.menuSkinName.textContent = skin.name;
+    if (el.inventoryEquipped) el.inventoryEquipped.textContent = skin.name;
+  }
+
   function updateMenuStats() {
     el.bestScore.textContent = formatNumber(save.highScore);
     el.bestTime.textContent = formatTime(save.maxTime);
     el.bestLevel.textContent = String(Math.max(1, save.maxLevel));
     el.totalKills.textContent = formatNumber(save.totalKills);
+    refreshWalletDisplays();
+    refreshMenuSkin();
+  }
+
+  function showStoreMessage(target, text, kind) {
+    const element = target === 'inventory' ? el.inventoryMessage : el.shopMessage;
+    if (!element) return;
+    window.clearTimeout(element._hideTimer);
+    element.textContent = text;
+    element.className = 'store-message ' + (kind || 'info') + ' is-visible';
+    element._hideTimer = window.setTimeout(function () {
+      element.classList.remove('is-visible');
+    }, 2800);
+  }
+
+  function bindSkinImageFallbacks(container) {
+    if (!container) return;
+    container.querySelectorAll('.skin-card-image').forEach(function (image) {
+      function markFailed() {
+        image.style.display = 'none';
+        const portrait = image.closest('.skin-portrait');
+        if (portrait) portrait.classList.add('image-failed');
+      }
+      if (image.complete && image.naturalWidth === 0) markFailed();
+      image.addEventListener('error', markFailed, { once: true });
+    });
+  }
+
+  function skinCardMarkup(skin, mode) {
+    const owned = save.ownedSkins.indexOf(skin.id) !== -1;
+    const equipped = save.equippedSkin === skin.id;
+    const affordable = save.coins >= skin.price;
+    const isShop = mode === 'shop';
+    const priceText = skin.price === 0 ? '免费' : formatNumber(skin.price) + ' 金币';
+    let statusText = '未拥有';
+    let actionLabel = '购买';
+    let action = 'buy';
+    let buttonClass = 'skin-action-btn buy';
+    let disabled = false;
+
+    if (equipped) {
+      statusText = '当前装备';
+      actionLabel = '已装备';
+      action = '';
+      buttonClass = 'skin-action-btn is-equipped';
+      disabled = true;
+    } else if (owned) {
+      statusText = '已拥有';
+      actionLabel = '装备';
+      action = 'equip';
+      buttonClass = 'skin-action-btn equip';
+    } else if (!affordable) {
+      statusText = '未拥有';
+      actionLabel = '金币不足';
+      action = 'buy';
+      buttonClass = 'skin-action-btn buy is-poor';
+    }
+
+    let badgeText = skin.badge || '';
+    if (!isShop) badgeText = owned ? '已拥有' : '';
+    const priceMarkup = isShop ? '<span class="skin-price">' + priceText + '</span>' : '';
+    const cardClass = [
+      'skin-card',
+      equipped ? 'is-equipped' : '',
+      owned ? 'is-owned' : '',
+      !owned && !affordable ? 'is-poor' : ''
+    ].filter(Boolean).join(' ');
+    const equippedMark = equipped ? '<span class="skin-equipped-mark">当前装备</span>' : '';
+
+    return (
+      '<article class="' + cardClass + '" style="--skin-accent:' + skin.accent + '">' +
+        '<div class="skin-portrait">' +
+          '<span class="skin-fallback" aria-hidden="true">' + skin.name.charAt(0) + '</span>' +
+          '<img class="skin-card-image" src="' + skinImageSrc(skin) + '" alt="' + skin.name + '皮肤图片" loading="lazy">' +
+          (badgeText ? '<span class="skin-badge">' + badgeText + '</span>' : '') +
+          equippedMark +
+        '</div>' +
+        '<div class="skin-info">' +
+          '<h3 class="skin-name">' + skin.name + '</h3>' +
+          '<p class="skin-desc">' + skin.desc + '</p>' +
+          '<div class="skin-meta">' +
+            '<span class="skin-state">' + statusText + '</span>' +
+            priceMarkup +
+          '</div>' +
+          '<button class="' + buttonClass + '" type="button" data-skin-action="' + action + '" data-skin-id="' + skin.id + '"' +
+            (disabled ? ' disabled' : '') + '>' + actionLabel + '</button>' +
+        '</div>' +
+      '</article>'
+    );
+  }
+
+  function renderShop() {
+    if (!el.shopCards) return;
+    refreshWalletDisplays();
+    el.shopCards.innerHTML = SKINS.map(function (skin) {
+      return skinCardMarkup(skin, 'shop');
+    }).join('');
+    bindSkinImageFallbacks(el.shopCards);
+  }
+
+  function renderInventory() {
+    if (!el.inventoryCards) return;
+    refreshWalletDisplays();
+    const ownedSkins = SKINS.filter(function (skin) {
+      return save.ownedSkins.indexOf(skin.id) !== -1;
+    });
+    const equipped = getEquippedSkin();
+    if (el.inventoryCount) {
+      el.inventoryCount.textContent = ownedSkins.length + ' / ' + SKINS.length;
+    }
+    if (el.inventoryEquipped) {
+      el.inventoryEquipped.textContent = equipped.name;
+    }
+    el.inventoryCards.innerHTML = ownedSkins.map(function (skin) {
+      return skinCardMarkup(skin, 'inventory');
+    }).join('');
+    bindSkinImageFallbacks(el.inventoryCards);
+  }
+
+  function purchaseSkin(skinId) {
+    if (skinActionLock) return;
+    const skin = getSkinById(skinId);
+    if (!skin) return;
+    if (save.ownedSkins.indexOf(skin.id) !== -1) {
+      showStoreMessage('shop', '你已经拥有「' + skin.name + '」，可以直接装备。', 'info');
+      renderShop();
+      return;
+    }
+    if (save.coins < skin.price) {
+      const missing = skin.price - save.coins;
+      showStoreMessage('shop', '金币不足，还差 ' + formatNumber(missing) + ' 金币。完成关卡可以获得金币。', 'error');
+      audio.play('denied');
+      return;
+    }
+
+    skinActionLock = true;
+    save.coins -= skin.price;
+    save.ownedSkins.push(skin.id);
+    persistSave();
+    refreshWalletDisplays();
+    refreshMenuSkin();
+    renderShop();
+    renderInventory();
+    showStoreMessage('shop', '购买成功：' + skin.name + ' 已放入仓库。当前装备不会被自动替换。', 'success');
+    audio.play('purchase');
+    window.setTimeout(function () {
+      skinActionLock = false;
+    }, 300);
+  }
+
+  function equipSkin(skinId) {
+    const skin = getSkinById(skinId);
+    if (!skin) return;
+    if (save.ownedSkins.indexOf(skin.id) === -1) {
+      showStoreMessage(activeStore === 'inventory' ? 'inventory' : 'shop', '尚未拥有「' + skin.name + '」，无法装备。', 'error');
+      audio.play('denied');
+      return;
+    }
+    if (save.equippedSkin === skin.id) {
+      showStoreMessage(activeStore === 'inventory' ? 'inventory' : 'shop', '「' + skin.name + '」已经是当前装备。', 'info');
+      return;
+    }
+    save.equippedSkin = skin.id;
+    persistSave();
+    refreshMenuSkin();
+    refreshWalletDisplays();
+    renderShop();
+    renderInventory();
+    showStoreMessage(activeStore === 'inventory' ? 'inventory' : 'shop', '已装备：' + skin.name + '。进入游戏后会使用这款皮肤。', 'success');
+    audio.play('equip');
+  }
+
+  function handleSkinAction(event) {
+    const button = event.target.closest('[data-skin-action]');
+    if (!button) return;
+    const action = button.getAttribute('data-skin-action');
+    const skinId = button.getAttribute('data-skin-id');
+    if (action === 'buy') purchaseSkin(skinId);
+    if (action === 'equip') equipSkin(skinId);
+  }
+
+  function openStore(kind, returnTo) {
+    if (!screens[kind]) return;
+    if (state === S.PLAYING) {
+      pauseGame();
+      returnTo = 'pause';
+    }
+    if (state !== S.MENU && state !== S.PAUSED) return;
+
+    activeStore = kind;
+    storeReturn = returnTo || (state === S.PAUSED ? 'pause' : 'menu');
+    hideScreens();
+    showScreen(kind);
+    refreshWalletDisplays();
+    refreshMenuSkin();
+    if (kind === 'shop') {
+      renderShop();
+      if (el.shopMessage) {
+        el.shopMessage.textContent = '';
+        el.shopMessage.className = 'store-message';
+      }
+      if (el.shopBackBtn) el.shopBackBtn.focus({ preventScroll: true });
+    } else {
+      renderInventory();
+      if (el.inventoryMessage) {
+        el.inventoryMessage.textContent = '';
+        el.inventoryMessage.className = 'store-message';
+      }
+      if (el.inventoryBackBtn) el.inventoryBackBtn.focus({ preventScroll: true });
+    }
+    audio.play('ui');
+  }
+
+  function closeStore() {
+    if (!activeStore) return;
+    const back = storeReturn;
+    activeStore = null;
+    storeReturn = null;
+    hideScreens();
+    if (back === 'pause' && state === S.PAUSED && game) {
+      showScreen('pause');
+      el.resumeBtn.focus({ preventScroll: true });
+    } else {
+      if (state !== S.MENU) {
+        state = S.MENU;
+        setState(S.MENU);
+      }
+      showScreen('menu');
+      updateMenuStats();
+      if (el.menuShopBtn) el.menuShopBtn.focus({ preventScroll: true });
+    }
+    audio.play('ui');
   }
 
   function toggleSound() {
@@ -1133,6 +1562,14 @@
     }
 
     if (event.repeat) return;
+
+    if (activeStore) {
+      if (code === 'Escape') {
+        event.preventDefault();
+        closeStore();
+      }
+      return;
+    }
 
     if (code === 'Escape') {
       if (state === S.PLAYING || state === S.PAUSED) {
@@ -1384,6 +1821,8 @@
       stageTarget: stageTargetFor(1),
       stageState: 'fighting',
       stageTransition: 0,
+      lastRewardedStage: 0,
+      coinReward: null,
       upgradeOptions: [],
       upgradeChoosing: false,
       deathTimer: 0,
@@ -1411,6 +1850,8 @@
   function startGame(mode) {
     hideScreens();
     hideInstructions();
+    activeStore = null;
+    storeReturn = null;
     audio.ensure();
     clearInput();
     game = createGame(mode);
@@ -1474,6 +1915,8 @@
   function returnToMenu() {
     hideScreens();
     hideInstructions();
+    activeStore = null;
+    storeReturn = null;
     clearInput();
     game = null;
     setState(S.MENU);
@@ -2531,8 +2974,31 @@
     }
   }
 
+  function awardStageClearCoins(stage) {
+    if (!game || game.mode !== 'stage') return 0;
+    const completedStage = Math.max(1, Math.floor(Number(stage) || 1));
+    if (completedStage <= (game.lastRewardedStage || 0)) return 0;
+
+    const reward = stageClearCoinReward(completedStage);
+    game.lastRewardedStage = completedStage;
+    save.coins += reward;
+    persistSave();
+    refreshWalletDisplays();
+    game.coinReward = {
+      stage: completedStage,
+      amount: reward,
+      time: 3.4,
+      total: 3.4
+    };
+    audio.play('coin');
+    return reward;
+  }
+
   function advanceStage() {
     if (!game || game.mode !== 'stage') return;
+    const completedStage = game.stage;
+    awardStageClearCoins(completedStage);
+
     game.stage += 1;
     game.stageKills = 0;
     game.stageTarget = stageTargetFor(game.stage);
@@ -3392,6 +3858,11 @@
       if (game.banner.time <= 0) game.banner = null;
     }
 
+    if (game.coinReward) {
+      game.coinReward.time -= dt;
+      if (game.coinReward.time <= 0) game.coinReward = null;
+    }
+
     for (let i = 0; i < game.toasts.length; i += 1) {
       game.toasts[i].time -= dt;
     }
@@ -4035,7 +4506,8 @@
     ctx.fill();
 
     const lowHp = p.hp / p.maxHp < 0.3;
-    const ringColor = lowHp ? '#ff4f6d' : '#5de1ff';
+    const equippedSkin = getEquippedSkin();
+    const ringColor = lowHp ? '#ff4f6d' : equippedSkin.ring;
     const dashRatio = p.dashCd > 0 ? 1 - p.dashCd / (2.4 * p.dashCooldownMult) : 1;
     if (!p.dead) {
       ctx.save();
@@ -4078,8 +4550,8 @@
     drawPlayerWeapon(p, renderY);
 
     ctx.globalAlpha = deathAlpha * invulnBlink;
-    // 玩家使用 assets/player.png，中心点与碰撞圆心 (p.x, p.y) 一致。
-    drawCircularAvatar(avatars.player, p.x, renderY, p.r, ringColor, {
+    // 根据当前装备皮肤读取对应图片；中心点与碰撞圆心 (p.x, p.y) 一致。
+    drawCircularAvatar(getEquippedAvatar(), p.x, renderY, p.r, ringColor, {
       ringWidth: 2.5,
       dashed: lowHp
     });
@@ -4423,6 +4895,7 @@
     }
 
     drawBossHUD();
+    drawCoinReward();
     drawToasts();
     drawTutorial();
     drawOffscreenBossArrow();
@@ -4439,7 +4912,8 @@
 
     const avatarX = x + 46;
     const avatarY = y + 49;
-    drawCircularAvatar(avatars.player, avatarX, avatarY, 30, '#5de1ff', { ringWidth: 2.2 });
+    const equippedSkin = getEquippedSkin();
+    drawCircularAvatar(getEquippedAvatar(), avatarX, avatarY, 30, equippedSkin.ring, { ringWidth: 2.2 });
     ctx.save();
     ctx.beginPath();
     ctx.arc(avatarX + 21, avatarY + 21, 11, 0, TAU);
@@ -4637,7 +5111,8 @@
 
     drawPanel(x, y, w, h, 14, 'rgba(8,15,24,0.84)', 'rgba(103,181,214,0.17)');
 
-    drawCircularAvatar(avatars.player, x + 31, y + 36, 23, '#5de1ff', { ringWidth: 2 });
+    const equippedSkin = getEquippedSkin();
+    drawCircularAvatar(getEquippedAvatar(), x + 31, y + 36, 23, equippedSkin.ring, { ringWidth: 2 });
     ctx.save();
     ctx.beginPath();
     ctx.arc(x + 51, y + 55, 8, 0, TAU);
@@ -4762,6 +5237,68 @@
     ctx.fillText('阶段 ' + (boss.enraged ? 'Ⅱ' : 'Ⅰ'), x + w, barY + 24);
   }
 
+  function drawCoinReward() {
+    if (!game || !game.coinReward) return;
+    const reward = game.coinReward;
+    const elapsed = reward.total - reward.time;
+    const alpha = Math.min(clamp(elapsed / 0.2, 0, 1), clamp(reward.time / 0.45, 0, 1));
+    const rise = (1 - clamp(elapsed / 0.28, 0, 1)) * 12;
+    const width = Math.min(370, view.w - 28);
+    const height = 88;
+    const x = view.w * 0.5 - width * 0.5;
+    const y = view.h * 0.56 - rise;
+    const centerX = x + 44;
+    const centerY = y + height * 0.5;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    const glow = ctx.createRadialGradient(centerX, centerY, 6, centerX, centerY, 90);
+    glow.addColorStop(0, 'rgba(255,207,102,0.22)');
+    glow.addColorStop(1, 'rgba(255,207,102,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(centerX - 100, centerY - 90, 200, 180);
+
+    drawPanel(x, y, width, height, 18, 'rgba(12,14,18,0.94)', 'rgba(255,207,102,0.48)');
+    ctx.strokeStyle = 'rgba(255,225,150,0.22)';
+    ctx.lineWidth = 1;
+    roundRectPath(ctx, x + 4, y + 4, width - 8, height - 8, 14);
+    ctx.stroke();
+
+    const coinGradient = ctx.createLinearGradient(centerX - 20, centerY - 20, centerX + 20, centerY + 20);
+    coinGradient.addColorStop(0, '#fff1b8');
+    coinGradient.addColorStop(0.55, '#ffcf66');
+    coinGradient.addColorStop(1, '#c78a2c');
+    ctx.fillStyle = coinGradient;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 24, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(90,54,11,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 20, 0, TAU);
+    ctx.stroke();
+    setFont(16, 900);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#4b2b08';
+    ctx.fillText('◆', centerX, centerY + 1);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    setFont(15, 800);
+    ctx.fillStyle = '#f4ecdc';
+    ctx.fillText('第 ' + reward.stage + ' 关完成', x + 80, y + 33);
+    setMonoFont(22, 900);
+    ctx.fillStyle = '#ffcf66';
+    ctx.fillText('+' + formatNumber(reward.amount) + ' 金币', x + 80, y + 62);
+    ctx.textAlign = 'right';
+    setFont(9, 600);
+    ctx.fillStyle = 'rgba(255,231,176,0.6)';
+    ctx.fillText('已存入金币余额', x + width - 18, y + 62);
+    ctx.restore();
+  }
+
   function drawToasts() {
     if (!game || game.toasts.length === 0) return;
     const compact = view.w < 1180;
@@ -4870,6 +5407,15 @@
     el.pauseMenuBtn.addEventListener('click', returnToMenu);
     el.restartBtn.addEventListener('click', restartGame);
     el.gameOverMenuBtn.addEventListener('click', returnToMenu);
+
+    if (el.menuShopBtn) el.menuShopBtn.addEventListener('click', function () { openStore('shop', 'menu'); });
+    if (el.menuInventoryBtn) el.menuInventoryBtn.addEventListener('click', function () { openStore('inventory', 'menu'); });
+    if (el.pauseShopBtn) el.pauseShopBtn.addEventListener('click', function () { openStore('shop', 'pause'); });
+    if (el.pauseInventoryBtn) el.pauseInventoryBtn.addEventListener('click', function () { openStore('inventory', 'pause'); });
+    if (el.shopBackBtn) el.shopBackBtn.addEventListener('click', closeStore);
+    if (el.inventoryBackBtn) el.inventoryBackBtn.addEventListener('click', closeStore);
+    if (el.shopCards) el.shopCards.addEventListener('click', handleSkinAction);
+    if (el.inventoryCards) el.inventoryCards.addEventListener('click', handleSkinAction);
   }
 
   function init() {
@@ -4879,6 +5425,8 @@
     showScreen('menu');
     updateSoundButton();
     updateMenuStats();
+    // 将旧版存档补齐金币/皮肤字段，同时保留原有最佳成绩与设置。
+    persistSave();
     resizeCanvas();
     bindUI();
     setupInput();
