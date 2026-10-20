@@ -24,6 +24,7 @@
     PLAYING: 'playing',
     PAUSED: 'paused',
     UPGRADE: 'upgrade',
+    EVENT: 'event',
     DYING: 'dying',
     GAMEOVER: 'gameover'
   });
@@ -368,7 +369,12 @@
     sfx: true,
     coins: 0,
     ownedSkins: [DEFAULT_SKIN_ID],
-    equippedSkin: DEFAULT_SKIN_ID
+    equippedSkin: DEFAULT_SKIN_ID,
+    wuchaoyangAffinity: 0,
+    wuchaoyangCompanionUnlocked: false,
+    wuchaoyangBossRewardClaimed: false,
+    wuchaoyangLastReward: null,
+    wuchaoyangBossKills: 0
   };
 
   function normalizeSave(raw) {
@@ -383,6 +389,17 @@
     if (Number.isFinite(Number(raw.totalKills))) result.totalKills = Math.max(0, Math.floor(Number(raw.totalKills)));
     if (Number.isFinite(Number(raw.highestStage))) result.highestStage = Math.max(0, Math.floor(Number(raw.highestStage)));
     if (Number.isFinite(Number(raw.coins))) result.coins = Math.max(0, Math.floor(Number(raw.coins)));
+    if (Number.isFinite(Number(raw.wuchaoyangAffinity))) {
+      result.wuchaoyangAffinity = clamp(Math.floor(Number(raw.wuchaoyangAffinity)), 0, 100);
+    }
+    if (Number.isFinite(Number(raw.wuchaoyangBossKills))) {
+      result.wuchaoyangBossKills = Math.max(0, Math.floor(Number(raw.wuchaoyangBossKills)));
+    }
+    result.wuchaoyangCompanionUnlocked = raw.wuchaoyangCompanionUnlocked === true;
+    result.wuchaoyangBossRewardClaimed = raw.wuchaoyangBossRewardClaimed === true;
+    result.wuchaoyangLastReward = typeof raw.wuchaoyangLastReward === 'string'
+      ? raw.wuchaoyangLastReward
+      : null;
     result.sfx = raw.sfx !== false;
 
     const owned = [];
@@ -422,6 +439,18 @@
   }
 
   let save = loadSave();
+
+  /* =======================================================
+     随机事件管理器（事件内容位于 events.js）
+     ======================================================= */
+  const eventSystem = window.RandomEventSystem || null;
+  const randomEventManager = eventSystem ? new eventSystem.RandomEventManager() : null;
+  const WUCHAOYANG_EVENT = eventSystem && eventSystem.events
+    ? eventSystem.events.WUCHAOYANG
+    : null;
+  if (randomEventManager && WUCHAOYANG_EVENT) {
+    randomEventManager.register(WUCHAOYANG_EVENT);
+  }
 
   /* =======================================================
      程序化音效（Web Audio API，无外部音频文件）
@@ -625,6 +654,28 @@
           this.tone(1180, 1560, 0.12, 'triangle', 0.045, 0.08);
           this.tone(1560, 1760, 0.09, 'sine', 0.025, 0.16);
           break;
+        case 'event':
+          this.tone(220, 330, 0.32, 'sine', 0.06);
+          this.tone(330, 440, 0.42, 'triangle', 0.035, 0.16);
+          this.tone(660, 880, 0.35, 'sine', 0.02, 0.3);
+          break;
+        case 'event_charge':
+          this.tone(270, 520, 0.18, 'sawtooth', 0.035);
+          break;
+        case 'heart':
+          [523.25, 659.25, 880, 1174.66].forEach((freq, index) => {
+            this.tone(freq, freq * 1.08, 0.12, 'sine', 0.05, index * 0.07);
+          });
+          break;
+        case 'hostile':
+          this.tone(180, 84, 0.38, 'sawtooth', 0.11);
+          this.noise(0.24, 0.06, 360, 'lowpass');
+          break;
+        case 'event_victory':
+          [392, 523.25, 659.25, 783.99, 1046.5].forEach((freq, index) => {
+            this.tone(freq, freq, 0.24, 'triangle', 0.055, index * 0.09);
+          });
+          break;
         case 'purchase':
           this.tone(523.25, 523.25, 0.11, 'triangle', 0.05);
           this.tone(659.25, 659.25, 0.11, 'triangle', 0.05, 0.08);
@@ -663,8 +714,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-2';
-  const BULLET_VERSION = '20261020-2';
+  const AVATAR_VERSION = '20261020-3';
+  const BULLET_VERSION = '20261020-3';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -923,6 +974,24 @@
     );
   });
 
+  avatarDebug.event_wuchaoyang = {
+    label: '吴朝阳',
+    file: 'assets/events/wuchaoyang-avatar.jpg',
+    status: 'loading',
+    url: '',
+    attempts: 0,
+    width: 0,
+    height: 0,
+    error: null
+  };
+  const eventAvatar = createAvatarEntry(
+    'event_wuchaoyang',
+    'events/wuchaoyang-avatar.jpg',
+    '吴',
+    '#4e3618',
+    '#ffcf66'
+  );
+
   function getSkinById(id) {
     return SKIN_BY_ID[id] || null;
   }
@@ -938,6 +1007,11 @@
 
   function skinImageSrc(skin) {
     return buildAvatarUrl('skins/' + skin.file);
+  }
+
+  function eventPortraitSrc() {
+    if (!WUCHAOYANG_EVENT) return '';
+    return buildAvatarUrl('events/' + WUCHAOYANG_EVENT.portrait);
   }
 
   function getEquippedBulletFx() {
@@ -1102,6 +1176,25 @@
     inventoryMessage: $('inventoryMessage'),
     pauseShopBtn: $('pauseShopBtn'),
     pauseInventoryBtn: $('pauseInventoryBtn'),
+    eventScreen: $('eventScreen'),
+    eventPanel: $('eventPanel'),
+    eventPortraitFrame: $('eventPortraitFrame'),
+    eventPortrait: $('eventPortrait'),
+    eventHearts: $('eventHearts'),
+    eventAffinityValue: $('eventAffinityValue'),
+    eventAffinityFill: $('eventAffinityFill'),
+    eventAffinityNote: $('eventAffinityNote'),
+    eventName: $('eventName'),
+    eventRole: $('eventRole'),
+    eventText: $('eventText'),
+    eventChoices: $('eventChoices'),
+    eventFooter: $('eventFooter'),
+    eventRewardTitle: $('eventRewardTitle'),
+    eventRewardText: $('eventRewardText'),
+    eventCoinReward: $('eventCoinReward'),
+    eventCoinNote: $('eventCoinNote'),
+    eventRewardCards: $('eventRewardCards'),
+    eventRewardFooter: $('eventRewardFooter'),
     fireBtn: $('fireBtn'),
     reloadBtn: $('reloadBtn'),
     dashBtn: $('dashBtn'),
@@ -1118,7 +1211,9 @@
     pause: $('pauseScreen'),
     gameover: $('gameOverScreen'),
     shop: $('shopScreen'),
-    inventory: $('inventoryScreen')
+    inventory: $('inventoryScreen'),
+    event: $('eventScreen'),
+    eventReward: $('eventRewardScreen')
   };
 
   const view = {
@@ -1199,6 +1294,7 @@
       nextState === S.PLAYING ||
       nextState === S.PAUSED ||
       nextState === S.UPGRADE ||
+      nextState === S.EVENT ||
       nextState === S.DYING
     );
   }
@@ -1476,6 +1572,433 @@
       if (el.menuShopBtn) el.menuShopBtn.focus({ preventScroll: true });
     }
     audio.play('ui');
+  }
+
+  /* =======================================================
+     随机事件 UI / 流程
+     ======================================================= */
+  let eventPhaseTimer = 0;
+  let eventHeartTimer = 0;
+
+  function clearEventTimers() {
+    window.clearTimeout(eventPhaseTimer);
+    window.clearTimeout(eventHeartTimer);
+    eventPhaseTimer = 0;
+    eventHeartTimer = 0;
+  }
+
+  function updateEventAffinityDisplay() {
+    const max = WUCHAOYANG_EVENT ? WUCHAOYANG_EVENT.affinity.max : 100;
+    const value = clamp(Number(save.wuchaoyangAffinity) || 0, 0, max);
+    if (el.eventAffinityValue) el.eventAffinityValue.textContent = value + ' / ' + max;
+    if (el.eventAffinityFill) el.eventAffinityFill.style.width = (value / max * 100) + '%';
+    if (el.eventAffinityNote) {
+      const unlocked = !!save.wuchaoyangCompanionUnlocked;
+      el.eventAffinityNote.textContent = unlocked ? '随行伙伴：已解锁' : '随行伙伴：未解锁';
+      el.eventAffinityNote.classList.toggle('is-unlocked', unlocked);
+    }
+  }
+
+  function setEventSpeaker(name, role) {
+    if (el.eventName) el.eventName.textContent = name;
+    if (el.eventRole) el.eventRole.textContent = role || '';
+  }
+
+  function setEventText(text, highlight) {
+    if (!el.eventText) return;
+    el.eventText.textContent = text || '';
+    el.eventText.classList.toggle('is-highlight', !!highlight);
+  }
+
+  function setEventPortrait(event) {
+    if (!el.eventPortrait || !event) return;
+    const frame = el.eventPortraitFrame;
+    if (frame) frame.classList.remove('is-fallback');
+    el.eventPortrait.onload = function () {
+      if (el.eventPortraitFrame) el.eventPortraitFrame.classList.remove('is-fallback');
+    };
+    el.eventPortrait.onerror = function () {
+      if (el.eventPortraitFrame) el.eventPortraitFrame.classList.add('is-fallback');
+    };
+    el.eventPortrait.alt = event.personName + '立绘';
+    el.eventPortrait.src = buildAvatarUrl('events/' + event.portrait);
+  }
+
+  function createEventChoice(options) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'event-choice ' + (options.className || '');
+    const icon = document.createElement('span');
+    icon.className = 'event-choice-icon';
+    icon.textContent = options.icon || '›';
+    const copy = document.createElement('span');
+    copy.className = 'event-choice-copy';
+    const label = document.createElement('strong');
+    label.textContent = options.label;
+    const hint = document.createElement('small');
+    hint.textContent = options.hint || '';
+    copy.appendChild(label);
+    if (options.hint) copy.appendChild(hint);
+    button.appendChild(icon);
+    button.appendChild(copy);
+    button.addEventListener('click', options.onClick);
+    return button;
+  }
+
+  function showEventContinue(label, handler, hintText) {
+    if (!el.eventFooter) return;
+    el.eventFooter.innerHTML = '';
+    if (hintText) {
+      const hint = document.createElement('span');
+      hint.className = 'event-hint';
+      hint.textContent = hintText;
+      el.eventFooter.appendChild(hint);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-primary event-continue';
+    button.textContent = label;
+    button.addEventListener('click', handler);
+    el.eventFooter.appendChild(button);
+  }
+
+  function spawnEventHearts() {
+    if (!el.eventHearts) return;
+    el.eventHearts.innerHTML = '';
+    for (let i = 0; i < 18; i += 1) {
+      const heart = document.createElement('span');
+      heart.className = 'event-heart';
+      heart.textContent = '♥';
+      const x = rand(-90, 90);
+      heart.style.setProperty('--heart-x', x.toFixed(0) + 'px');
+      heart.style.setProperty('--heart-x-end', (x * 0.45 + rand(-20, 20)).toFixed(0) + 'px');
+      heart.style.setProperty('--heart-delay', rand(0, 0.75).toFixed(2) + 's');
+      heart.style.setProperty('--heart-duration', rand(1.9, 2.8).toFixed(2) + 's');
+      heart.style.setProperty('--heart-size', rand(12, 26).toFixed(0) + 'px');
+      heart.style.setProperty('--heart-color', Math.random() < 0.5 ? '#ff8fb0' : '#ffcf66');
+      el.eventHearts.appendChild(heart);
+    }
+    window.clearTimeout(eventHeartTimer);
+    eventHeartTimer = window.setTimeout(function () {
+      if (el.eventHearts) el.eventHearts.innerHTML = '';
+    }, 3600);
+  }
+
+  function renderEventIntro(event) {
+    if (!game || !event) return;
+    game.randomEvent.phase = 'intro';
+    setEventSpeaker(event.personName, event.intro.role);
+    setEventText(event.intro.text, false);
+    updateEventAffinityDisplay();
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    el.eventChoices.appendChild(createEventChoice({
+      icon: '⚔',
+      label: event.choices.fight.label,
+      hint: event.choices.fight.hint,
+      className: 'danger',
+      onClick: function () { startEventBoss(event); }
+    }));
+    el.eventChoices.appendChild(createEventChoice({
+      icon: '…',
+      label: event.choices.talk.label,
+      hint: event.choices.talk.hint,
+      className: 'calm',
+      onClick: function () { renderEventQuestion(event); }
+    }));
+  }
+
+  function renderEventQuestion(event) {
+    if (!game || !event) return;
+    game.randomEvent.phase = 'question';
+    setEventSpeaker(event.personName, '他抛出了一个问题');
+    setEventText(event.question.text, true);
+    updateEventAffinityDisplay();
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    const classes = ['option-a', 'option-b', 'option-c'];
+    event.question.options.forEach(function (option, index) {
+      el.eventChoices.appendChild(createEventChoice({
+        icon: option.label.charAt(0),
+        label: option.label.slice(2).trim(),
+        hint: '',
+        className: classes[index] || '',
+        onClick: function () { chooseTalkAnswer(option.id); }
+      }));
+    });
+    audio.play('ui');
+  }
+
+  function chooseTalkAnswer(answer) {
+    if (!game || game.randomEvent.phase !== 'question') return;
+    if (answer === 'shoot') handleAffectionResponse();
+    else handleHostileResponse();
+  }
+
+  function handleAffectionResponse() {
+    if (!game || !WUCHAOYANG_EVENT || game.randomEvent.phase !== 'question') return;
+    game.randomEvent.phase = 'affection';
+    save.wuchaoyangAffinity = clamp(
+      (Number(save.wuchaoyangAffinity) || 0) + WUCHAOYANG_EVENT.affinity.gain,
+      0,
+      WUCHAOYANG_EVENT.affinity.max
+    );
+    save.wuchaoyangCompanionUnlocked = true;
+    persistSave();
+    updateEventAffinityDisplay();
+    el.eventScreen.classList.remove('is-hostile');
+    el.eventScreen.classList.add('is-affection');
+    setEventText(WUCHAOYANG_EVENT.responses.shoot, true);
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    spawnEventHearts();
+    audio.play('heart');
+    window.clearTimeout(eventPhaseTimer);
+    eventPhaseTimer = window.setTimeout(function () {
+      if (!game || game.randomEvent.phase !== 'affection') return;
+      game.randomEvent.phase = 'companion-confirm';
+      setEventText(
+        WUCHAOYANG_EVENT.responses.shoot + '\n\n' + WUCHAOYANG_EVENT.responses.companion,
+        true
+      );
+      showEventContinue('继续', function () {
+        ensureCompanion();
+        finishRandomEvent('companion');
+      }, '好感度 +100 / 100 · 已解锁随行伙伴');
+      audio.play('ui');
+    }, 1600);
+  }
+
+  function handleHostileResponse() {
+    if (!game || !WUCHAOYANG_EVENT || game.randomEvent.phase !== 'question') return;
+    game.randomEvent.phase = 'hostile';
+    el.eventScreen.classList.remove('is-affection');
+    el.eventScreen.classList.add('is-hostile');
+    setEventText(WUCHAOYANG_EVENT.responses.hostile, false);
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '<span class="event-hint">敌对状态 · 战斗即将开始</span>';
+    audio.play('hostile');
+    window.clearTimeout(eventPhaseTimer);
+    eventPhaseTimer = window.setTimeout(function () {
+      if (!game || game.randomEvent.phase !== 'hostile') return;
+      startEventBoss(WUCHAOYANG_EVENT);
+    }, 1550);
+  }
+
+  function openRandomEvent(event) {
+    if (!game || !event || state !== S.PLAYING) return;
+    game.randomEvent.id = event.id;
+    game.randomEvent.triggered = true;
+    game.randomEvent.active = true;
+    game.randomEvent.phase = 'intro';
+    game.randomEvent.bossRewardGranted = false;
+    game.randomEvent.rewardChoice = null;
+    game.coinReward = null;
+    game.banner = null;
+    clearEventTimers();
+    setState(S.EVENT);
+    clearInput();
+    hideScreens();
+    showScreen('event');
+    el.eventScreen.classList.remove('is-hostile', 'is-affection');
+    el.eventHearts.innerHTML = '';
+    setEventPortrait(event);
+    renderEventIntro(event);
+    audio.play('event');
+    lastFrameTime = performance.now();
+  }
+
+  function ensureCompanion() {
+    if (!game || game.player.dead) return;
+    if (!save.wuchaoyangCompanionUnlocked) return;
+    if (!game.companion) game.companion = createCompanion(game.player);
+  }
+
+  function startEventBoss(event) {
+    if (!game || !event || game.eventBossActive) return;
+    clearEventTimers();
+    if (el.eventScreen) el.eventScreen.classList.remove('is-hostile', 'is-affection');
+    game.randomEvent.phase = 'boss';
+    game.enemies = [];
+    game.boss = null;
+    game.bossActive = false;
+    game.enemyBullets = [];
+    game.bullets = [];
+    game.companionBullets = [];
+    game.eventBoss = createEventBoss(event);
+    game.eventBossActive = true;
+    game.eventBossDefeated = false;
+    game.eventBossDelayed = [];
+    game.eventBossSpiral = null;
+    game.stageState = 'fighting';
+    game.spawnTimer = 1.2;
+    game.player.invuln = Math.max(game.player.invuln, 1.8);
+    game.banner = null;
+    game.coinReward = null;
+    hideScreens();
+    setState(S.PLAYING);
+    clearInput();
+    addShake(16);
+    audio.play('boss_warn');
+    lastFrameTime = performance.now();
+  }
+
+  function finishRandomEvent(reason) {
+    if (!game || !game.randomEvent.active) return;
+    const wasBoss = !!game.eventBossActive;
+    clearEventTimers();
+    if (randomEventManager) randomEventManager.finish();
+    game.randomEvent.active = false;
+    game.randomEvent.phase = 'done';
+    game.eventBossActive = false;
+    game.eventBoss = null;
+    game.eventBossDelayed = [];
+    game.eventBossSpiral = null;
+    game.enemyBullets = [];
+    game.companionBullets = [];
+    game.eventReward = null;
+    if (el.eventScreen) el.eventScreen.classList.remove('is-hostile', 'is-affection');
+    hideScreens();
+    clearInput();
+    setState(S.PLAYING);
+    game.player.invuln = Math.max(game.player.invuln, 1.3);
+    game.spawnTimer = Math.max(game.spawnTimer, 1.0);
+    if (game.mode === 'stage') {
+      setBanner(
+        '第 ' + game.stage + ' 关继续',
+        '目标：击败 ' + game.stageTarget + ' 名追兵' + (game.stage % 3 === 0 ? ' · 本关有 BOSS' : ''),
+        'stage',
+        2.4
+      );
+    }
+    if (wasBoss) {
+      addToast('事件战斗结束 · 关卡继续', 'good', 2.4);
+    }
+    audio.play('stage');
+    lastFrameTime = performance.now();
+  }
+
+  function cleanupEventOnGameOver() {
+    clearEventTimers();
+    if (randomEventManager) randomEventManager.finish();
+    if (game) {
+      game.randomEvent.active = false;
+      game.randomEvent.phase = 'dead';
+      game.eventBossActive = false;
+      game.eventBoss = null;
+      game.eventBossDelayed = [];
+      game.eventBossSpiral = null;
+      game.enemyBullets = [];
+      game.companion = null;
+      game.companionBullets = [];
+    }
+    if (el.eventScreen) el.eventScreen.classList.remove('is-hostile', 'is-affection');
+  }
+
+  function applySpecialReward(id) {
+    if (!game || !game.player) return null;
+    const p = game.player;
+    if (id === 'bulletDestroyer') {
+      p.damageMult *= 1.5;
+    } else if (id === 'rapidArsenal') {
+      p.fireRateMult *= 1.3;
+    } else if (id === 'undying') {
+      p.maxHp = Math.round(p.maxHp * 1.5);
+      p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.5);
+    } else {
+      return null;
+    }
+    game.specialRewards[id] = true;
+    return id;
+  }
+
+  function renderEventRewardChoices(event) {
+    if (!el.eventRewardCards || !event) return;
+    el.eventRewardCards.innerHTML = '';
+    event.reward.choices.forEach(function (choice, index) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'event-reward-card';
+      button.style.setProperty('--reward-color', choice.color);
+      button.setAttribute('data-reward-id', choice.id);
+      const icon = document.createElement('span');
+      icon.className = 'event-reward-icon';
+      icon.textContent = String.fromCharCode(65 + index);
+      const name = document.createElement('h3');
+      name.textContent = choice.name;
+      const desc = document.createElement('p');
+      desc.textContent = choice.desc;
+      const detail = document.createElement('span');
+      detail.className = 'event-reward-detail';
+      detail.textContent = choice.detail;
+      button.appendChild(icon);
+      button.appendChild(name);
+      button.appendChild(desc);
+      button.appendChild(detail);
+      button.addEventListener('click', function () {
+        chooseEventReward(choice.id);
+      });
+      el.eventRewardCards.appendChild(button);
+    });
+  }
+
+  function showEventReward(event, firstClear, coins) {
+    if (!game) return;
+    game.randomEvent.phase = 'reward';
+    game.eventReward = {
+      firstClear: firstClear,
+      coins: coins,
+      claimed: false,
+      choice: null
+    };
+    setState(S.EVENT);
+    clearInput();
+    hideScreens();
+    showScreen('eventReward');
+    el.eventRewardTitle.textContent = '战斗胜利';
+    el.eventRewardText.textContent = firstClear
+      ? '你击败了抉择之影，首次通关金币已发放。选择一项临时强化词条。'
+      : '你再次击败了抉择之影。首次金币奖励已领取，仍可选择一项临时强化词条。';
+    el.eventCoinReward.textContent = '+' + formatNumber(coins);
+    el.eventCoinNote.textContent = firstClear ? '首次击败奖励已发放' : '首次金币奖励已领取';
+    el.eventRewardFooter.innerHTML = '';
+    renderEventRewardChoices(event);
+    audio.play('event_victory');
+    lastFrameTime = performance.now();
+  }
+
+  function chooseEventReward(id) {
+    if (!game || !game.eventReward || game.eventReward.claimed) return;
+    const event = WUCHAOYANG_EVENT;
+    if (!event) return;
+    const choice = event.reward.choices.find(function (item) { return item.id === id; });
+    if (!choice) return;
+    const applied = applySpecialReward(id);
+    if (!applied) return;
+    game.eventReward.claimed = true;
+    game.eventReward.choice = id;
+    game.randomEvent.rewardChoice = id;
+    save.wuchaoyangLastReward = id;
+    persistSave();
+    const cards = el.eventRewardCards.querySelectorAll('.event-reward-card');
+    cards.forEach(function (card) {
+      card.disabled = true;
+      card.classList.toggle('is-chosen', card.getAttribute('data-reward-id') === id);
+    });
+    el.eventRewardFooter.innerHTML = '';
+    const message = document.createElement('span');
+    message.className = 'event-reward-message';
+    message.textContent = '已获得：' + choice.name + ' · 本局临时生效';
+    el.eventRewardFooter.appendChild(message);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-primary event-continue';
+    button.textContent = '继续';
+    button.addEventListener('click', function () {
+      finishRandomEvent('reward');
+    });
+    el.eventRewardFooter.appendChild(button);
+    audio.play('upgrade');
   }
 
   function toggleSound() {
@@ -1885,6 +2408,18 @@
     return 10 + stage * 3;
   }
 
+  function createCompanion(player) {
+    return {
+      x: clamp(player.x - 46, player.r + 8, MAP.w - player.r - 8),
+      y: clamp(player.y + 24, player.r + 8, MAP.h - player.r - 8),
+      r: 18,
+      fireTimer: 0.65,
+      bob: rand(0, TAU),
+      aim: -Math.PI * 0.5,
+      active: true
+    };
+  }
+
   function createGame(mode) {
     const g = {
       mode: mode === 'stage' ? 'stage' : 'survival',
@@ -1907,6 +2442,23 @@
       enemies: [],
       bullets: [],
       enemyBullets: [],
+      companionBullets: [],
+      companion: null,
+      eventBoss: null,
+      eventBossActive: false,
+      eventBossDefeated: false,
+      eventBossDelayed: [],
+      eventBossSpiral: null,
+      eventReward: null,
+      specialRewards: Object.create(null),
+      randomEvent: {
+        id: null,
+        triggered: false,
+        active: false,
+        phase: 'idle',
+        bossRewardGranted: false,
+        rewardChoice: null
+      },
       orbs: [],
       particles: [],
       numbers: [],
@@ -1934,6 +2486,9 @@
       finalScore: 0,
       newRecord: false
     };
+    if (save.wuchaoyangCompanionUnlocked) {
+      g.companion = createCompanion(g.player);
+    }
     return g;
   }
 
@@ -1955,6 +2510,7 @@
     hideInstructions();
     activeStore = null;
     storeReturn = null;
+    if (randomEventManager) randomEventManager.resetRun();
     audio.ensure();
     clearInput();
     game = createGame(mode);
@@ -2020,6 +2576,7 @@
     hideInstructions();
     activeStore = null;
     storeReturn = null;
+    if (randomEventManager) randomEventManager.resetRun();
     clearInput();
     game = null;
     setState(S.MENU);
@@ -2094,7 +2651,6 @@
   function updateAim() {
     if (!game) return;
     const p = game.player;
-
     if (input.aim.active && (Math.abs(input.aim.x) > 0.05 || Math.abs(input.aim.y) > 0.05)) {
       p.aimAngle = Math.atan2(input.aim.y, input.aim.x);
       return;
@@ -2645,6 +3201,7 @@
   function updateSpawning(dt) {
     if (!game || game.player.dead) return;
     const g = game;
+    if (g.eventBossActive) return;
 
     if (g.mode === 'survival') {
       if (!g.bossActive && g.time >= g.nextBossAt) {
@@ -2877,6 +3434,445 @@
     audio.play('boss_shoot');
   }
 
+  /* =======================================================
+     吴朝阳事件 Boss / 随行伙伴
+     ======================================================= */
+  function eventBossVerticalOffset() {
+    const compact = view.w < 1180;
+    const desiredScreenY = compact ? Math.max(250, Math.min(300, view.h * 0.34)) : 300;
+    return Math.max(70, view.h * 0.5 - desiredScreenY);
+  }
+
+  function createEventBoss(event) {
+    const p = game.player;
+    const cfg = event.boss;
+    return {
+      name: cfg.name,
+      title: cfg.title,
+      x: clamp(p.x, 130, MAP.w - 130),
+      y: clamp(p.y - eventBossVerticalOffset(), 130, MAP.h - 130),
+      r: cfg.radius,
+      hp: cfg.hp,
+      maxHp: cfg.hp,
+      phase: 1,
+      enraged: false,
+      spawnT: 1.25,
+      attackTimer: 1.65,
+      patternIndex: 0,
+      telegraph: null,
+      spiral: null,
+      hitFlash: 0,
+      castFlash: 0,
+      drift: rand(0, TAU),
+      dead: false,
+      defeated: false
+    };
+  }
+
+  function startEventBossTelegraph(boss) {
+    const phase2 = boss.enraged;
+    const patterns = phase2
+      ? ['spiral', 'combo', 'delayed', 'fan']
+      : ['fan', 'ring', 'delayed'];
+    const type = patterns[boss.patternIndex % patterns.length];
+    boss.patternIndex += 1;
+    const p = game.player;
+    const baseAngle = Math.atan2(p.y - boss.y, p.x - boss.x);
+    const durations = {
+      fan: phase2 ? 0.68 : 0.82,
+      ring: phase2 ? 0.72 : 0.9,
+      delayed: phase2 ? 1.0 : 1.15,
+      spiral: 0.78,
+      combo: 0.9
+    };
+    const telegraph = {
+      type: type,
+      time: durations[type] || 0.85,
+      total: durations[type] || 0.85,
+      baseAngle: baseAngle,
+      markers: []
+    };
+
+    if (type === 'delayed') {
+      for (let i = 0; i < 3; i += 1) {
+        const distance = i === 0 ? 0 : rand(60, 115);
+        const angle = baseAngle + Math.PI + rand(-0.8, 0.8) + (i === 2 ? 0.3 : 0);
+        telegraph.markers.push({
+          x: clamp(p.x + Math.cos(angle) * distance, 35, MAP.w - 35),
+          y: clamp(p.y + Math.sin(angle) * distance, 35, MAP.h - 35)
+        });
+      }
+    }
+
+    boss.telegraph = telegraph;
+    boss.castFlash = 0.28;
+    audio.play('event_charge');
+  }
+
+  function fireEventFan(boss, baseAngle, count, spread, speed, damage) {
+    const step = count > 1 ? spread / (count - 1) : 0;
+    for (let i = 0; i < count; i += 1) {
+      const angle = baseAngle - spread * 0.5 + step * i;
+      spawnEventBossBullet(
+        boss.x + Math.cos(angle) * (boss.r + 7),
+        boss.y + Math.sin(angle) * (boss.r + 7),
+        angle,
+        speed,
+        damage,
+        6.2,
+        '#ff7b8d',
+        5.4
+      );
+    }
+  }
+
+  function fireEventRing(boss, count, speed, damage) {
+    const offset = rand(0, TAU);
+    for (let i = 0; i < count; i += 1) {
+      const angle = offset + (i / count) * TAU;
+      spawnEventBossBullet(
+        boss.x + Math.cos(angle) * (boss.r + 6),
+        boss.y + Math.sin(angle) * (boss.r + 6),
+        angle,
+        speed,
+        damage,
+        5.7,
+        '#ffcf66',
+        5.6
+      );
+    }
+  }
+
+  function executeEventBossTelegraph(boss, telegraph) {
+    const phase2 = boss.enraged;
+    const type = telegraph.type;
+    if (type === 'fan') {
+      fireEventFan(boss, telegraph.baseAngle, phase2 ? 9 : 7, phase2 ? 0.95 : 0.8, phase2 ? 300 : 265, 8);
+      boss.attackTimer = phase2 ? 1.05 : 1.35;
+    } else if (type === 'ring') {
+      fireEventRing(boss, phase2 ? 18 : 14, phase2 ? 225 : 195, 7);
+      boss.attackTimer = phase2 ? 1.1 : 1.45;
+    } else if (type === 'delayed') {
+      for (let i = 0; i < telegraph.markers.length; i += 1) {
+        const marker = telegraph.markers[i];
+        const base = Math.atan2(marker.y - boss.y, marker.x - boss.x);
+        for (let k = -1; k <= 1; k += 2) {
+          spawnEventBossBullet(
+            boss.x + Math.cos(base) * (boss.r + 8),
+            boss.y + Math.sin(base) * (boss.r + 8),
+            base + k * 0.055,
+            320,
+            9,
+            7,
+            '#ffad54',
+            5.2
+          );
+        }
+        addRing(marker.x, marker.y, 18, '#ffb15c', 0.32, 3);
+      }
+      boss.attackTimer = phase2 ? 1.2 : 1.5;
+    } else if (type === 'spiral') {
+      boss.spiral = {
+        time: phase2 ? 1.75 : 1.5,
+        tick: 0,
+        angle: telegraph.baseAngle,
+        dir: Math.random() < 0.5 ? -1 : 1
+      };
+    } else if (type === 'combo') {
+      fireEventFan(boss, telegraph.baseAngle, 9, 0.9, 280, 8);
+      fireEventRing(boss, 16, 210, 7);
+      boss.attackTimer = 1.45;
+    }
+    boss.castFlash = 0.22;
+    audio.play('boss_shoot');
+  }
+
+  function updateEventBossSpiral(boss, dt) {
+    const spiral = boss.spiral;
+    if (!spiral) return;
+    spiral.time -= dt;
+    spiral.tick -= dt;
+    if (spiral.tick <= 0) {
+      spiral.tick = boss.enraged ? 0.095 : 0.115;
+      spiral.angle += (boss.enraged ? 0.19 : 0.16) * spiral.dir;
+      for (let arm = 0; arm < 2; arm += 1) {
+        const angle = spiral.angle + arm * Math.PI;
+        spawnEventBossBullet(
+          boss.x + Math.cos(angle) * (boss.r + 5),
+          boss.y + Math.sin(angle) * (boss.r + 5),
+          angle,
+          boss.enraged ? 215 : 195,
+          6,
+          5.3,
+          arm === 0 ? '#c9a7ff' : '#ffad54',
+          5.4
+        );
+      }
+    }
+    if (spiral.time <= 0) {
+      boss.spiral = null;
+      boss.attackTimer = boss.enraged ? 0.95 : 1.25;
+    }
+  }
+
+  function updateEventBoss(dt) {
+    if (!game || state !== S.PLAYING || !game.eventBossActive || !game.eventBoss) return;
+    const boss = game.eventBoss;
+    const p = game.player;
+    if (boss.dead || boss.defeated) return;
+
+    boss.hitFlash = Math.max(0, boss.hitFlash - dt);
+    boss.castFlash = Math.max(0, boss.castFlash - dt);
+
+    if (boss.spawnT > 0) {
+      boss.spawnT -= dt;
+      return;
+    }
+
+    if (!boss.enraged && boss.hp <= boss.maxHp * WUCHAOYANG_EVENT.boss.phase2At) {
+      boss.enraged = true;
+      boss.phase = 2;
+      boss.patternIndex = 0;
+      boss.telegraph = null;
+      boss.attackTimer = 0.9;
+      addToast('吴朝阳进入第二阶段 · 弹幕加强', 'warn', 2.5);
+      addShake(14);
+      audio.play('boss_warn');
+    }
+
+    const t = game.time;
+    const desiredX = p.x + Math.sin(t * 0.72 + boss.drift) * (boss.enraged ? 155 : 130);
+    const desiredY = p.y - eventBossVerticalOffset() + Math.cos(t * 0.9 + boss.drift) * 24;
+    const follow = 1 - Math.exp(-dt * (boss.enraged ? 2.0 : 1.45));
+    boss.x += (desiredX - boss.x) * follow;
+    boss.y += (desiredY - boss.y) * follow;
+    clampToMap(boss);
+
+    if (boss.spiral) {
+      updateEventBossSpiral(boss, dt);
+      return;
+    }
+
+    if (boss.telegraph) {
+      boss.telegraph.time -= dt;
+      if (boss.telegraph.time <= 0) {
+        const telegraph = boss.telegraph;
+        boss.telegraph = null;
+        executeEventBossTelegraph(boss, telegraph);
+      }
+      return;
+    }
+
+    boss.attackTimer -= dt;
+    if (boss.attackTimer <= 0) startEventBossTelegraph(boss);
+  }
+
+  function spawnEventBossBullet(x, y, angle, speed, damage, radius, color, life) {
+    if (!game) return;
+    if (game.enemyBullets.length >= MAX_ENEMY_BULLETS - 2) return;
+    game.enemyBullets.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      damage: damage,
+      radius: radius,
+      life: life || 5.2,
+      color: color,
+      dead: false,
+      eventBoss: true,
+      trail: [{ x: x, y: y }]
+    });
+  }
+
+  function damageEventBoss(amount, options) {
+    if (!game || !game.eventBossActive || !game.eventBoss || game.eventBoss.defeated) return;
+    const boss = game.eventBoss;
+    const damage = Math.max(1, amount);
+    boss.hp = Math.max(0, boss.hp - damage);
+    boss.hitFlash = 0.14;
+    if (!options || !options.silent) {
+      addDamageNumber(boss.x + rand(-8, 8), boss.y - boss.r * 0.7, Math.round(damage), '#ffcf66', false, '-');
+      audio.play('hit');
+    }
+    if (boss.hp <= 0) defeatEventBoss();
+  }
+
+  function defeatEventBoss() {
+    if (!game || !game.eventBoss || game.eventBoss.defeated) return;
+    const boss = game.eventBoss;
+    boss.defeated = true;
+    boss.dead = true;
+    const bx = boss.x;
+    const by = boss.y;
+    game.eventBossActive = false;
+    game.eventBoss = null;
+    game.eventBossDelayed = [];
+    game.eventBossSpiral = null;
+    game.enemyBullets = [];
+    game.companionBullets = [];
+    game.player.invuln = Math.max(game.player.invuln, 2);
+
+    addShake(24);
+    audio.play('boss_die');
+    addRing(bx, by, boss.r, '#ffcf66', 1.2, 5);
+    addRing(bx, by, boss.r * 0.7, '#ff7b8d', 0.9, 3);
+    for (let i = 0; i < 48; i += 1) {
+      const angle = rand(0, TAU);
+      const speed = rand(50, 360);
+      spawnParticle(
+        bx,
+        by,
+        Math.cos(angle) * speed,
+        Math.sin(angle) * speed,
+        rand(0.35, 1.1),
+        rand(2, 9),
+        Math.random() < 0.45 ? '#ffcf66' : Math.random() < 0.6 ? '#ff7b8d' : '#c9a7ff',
+        true
+      );
+    }
+
+    save.wuchaoyangBossKills = Math.max(0, Number(save.wuchaoyangBossKills) || 0) + 1;
+    const firstClear = !save.wuchaoyangBossRewardClaimed;
+    let coins = 0;
+    if (firstClear) {
+      coins = WUCHAOYANG_EVENT.reward.coins;
+      save.coins += coins;
+      save.wuchaoyangBossRewardClaimed = true;
+      refreshWalletDisplays();
+    }
+    persistSave();
+    game.eventBossDefeated = true;
+    game.randomEvent.phase = 'reward';
+    showEventReward(WUCHAOYANG_EVENT, firstClear, coins);
+  }
+
+  function findCompanionTarget() {
+    if (!game) return null;
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+      return {
+        kind: 'eventBoss',
+        x: game.eventBoss.x,
+        y: game.eventBoss.y,
+        r: game.eventBoss.r
+      };
+    }
+    let best = null;
+    let bestDistance = 600 * 600;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead) continue;
+      const d2 = distSq(game.companion.x, game.companion.y, enemy.x, enemy.y);
+      if (d2 < bestDistance) {
+        bestDistance = d2;
+        best = enemy;
+      }
+    }
+    if (!best) return null;
+    return { kind: 'enemy', x: best.x, y: best.y, r: best.r, ref: best };
+  }
+
+  function spawnCompanionBullet(companion, target) {
+    if (!game) return;
+    if (game.companionBullets.length >= 80) game.companionBullets.shift();
+    const angle = Math.atan2(target.y - companion.y, target.x - companion.x);
+    const speed = 820;
+    const x = companion.x + Math.cos(angle) * 18;
+    const y = companion.y + Math.sin(angle) * 18;
+    game.companionBullets.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      damage: Math.max(1, game.stage) * 10,
+      radius: 3.2,
+      life: 1.15,
+      color: '#ffcf66',
+      dead: false,
+      trail: [{ x: x, y: y }]
+    });
+    companion.aim = angle;
+  }
+
+  function updateCompanion(dt) {
+    if (!game || !game.companion || game.player.dead) return;
+    const c = game.companion;
+    const p = game.player;
+    const side = p.x < 110 ? 1 : -1;
+    const targetX = clamp(p.x + side * 46, 24, MAP.w - 24);
+    const targetY = clamp(p.y + 24, 24, MAP.h - 24);
+    const follow = 1 - Math.exp(-dt * 7.5);
+    c.x += (targetX - c.x) * follow;
+    c.y += (targetY - c.y) * follow;
+    c.bob += dt * 3.1;
+    c.fireTimer -= dt;
+
+    if (c.fireTimer > 0 || p.dead) return;
+    if (game.stageState === 'transition') {
+      c.fireTimer = 0.2;
+      return;
+    }
+    const target = findCompanionTarget();
+    if (!target) {
+      c.fireTimer = 0.18;
+      return;
+    }
+    spawnCompanionBullet(c, target);
+    c.fireTimer = 0.62;
+  }
+
+  function updateCompanionBullets(dt) {
+    if (!game) return;
+    for (let i = 0; i < game.companionBullets.length; i += 1) {
+      const bullet = game.companionBullets[i];
+      if (bullet.dead) continue;
+      bullet.life -= dt;
+      const oldX = bullet.x;
+      const oldY = bullet.y;
+      const nextX = bullet.x + bullet.vx * dt;
+      const nextY = bullet.y + bullet.vy * dt;
+      bullet.trail.push({ x: nextX, y: nextY });
+      if (bullet.trail.length > 6) bullet.trail.shift();
+
+      if (bullet.life <= 0 || nextX < 0 || nextX > MAP.w || nextY < 0 || nextY > MAP.h) {
+        bullet.dead = true;
+        continue;
+      }
+
+      if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+        if (segmentCircleHit(oldX, oldY, nextX, nextY, game.eventBoss.x, game.eventBoss.y, game.eventBoss.r + bullet.radius)) {
+          damageEventBoss(bullet.damage, { silent: true });
+          bullet.dead = true;
+          continue;
+        }
+      }
+
+      for (let j = 0; j < game.enemies.length; j += 1) {
+        const enemy = game.enemies[j];
+        if (enemy.dead) continue;
+        if (!segmentCircleHit(oldX, oldY, nextX, nextY, enemy.x, enemy.y, enemy.r + bullet.radius)) continue;
+        const dx = enemy.x - oldX;
+        const dy = enemy.y - oldY;
+        const length = Math.max(0.001, Math.hypot(dx, dy));
+        damageEnemy(enemy, bullet.damage, {
+          critical: false,
+          pushX: (dx / length) * 10,
+          pushY: (dy / length) * 10
+        });
+        bullet.dead = true;
+        break;
+      }
+
+      if (!bullet.dead) {
+        bullet.x = nextX;
+        bullet.y = nextY;
+      }
+    }
+    game.companionBullets = game.companionBullets.filter(function (bullet) {
+      return !bullet.dead;
+    });
+  }
+
   function spawnEnemyBullet(x, y, angle, speed, damage, radius, color) {
     if (!game) return;
     if (game.enemyBullets.length >= MAX_ENEMY_BULLETS) game.enemyBullets.shift();
@@ -3063,7 +4059,7 @@
   }
 
   function completeStageObjective() {
-    if (!game || game.mode !== 'stage' || game.stageState !== 'fighting') return;
+    if (!game || game.mode !== 'stage' || game.stageState !== 'fighting' || game.eventBossActive) return;
     if (game.stage % 3 === 0) {
       game.stageState = 'boss';
       audio.play('stage');
@@ -3117,6 +4113,16 @@
       2.4
     );
     audio.play('stage');
+
+    // 只在第三关真正结束、且本局尚未触发过事件时判定一次。此时已进入第 4 关，
+    // 事件结束后直接恢复第 4 关，不会重复推进关卡。
+    if (completedStage === 3 && game.mode === 'stage' && randomEventManager) {
+      const event = randomEventManager.tryTrigger('stage-clear', {
+        stage: completedStage,
+        mode: game.mode
+      });
+      if (event) openRandomEvent(event);
+    }
   }
 
   /* =======================================================
@@ -3184,6 +4190,15 @@
     p.dead = true;
     p.hp = 0;
     p.dashTime = 0;
+    if (game.eventBossActive) {
+      game.eventBossActive = false;
+      game.eventBoss = null;
+      game.eventBossDelayed = [];
+      game.eventBossSpiral = null;
+      game.enemyBullets = [];
+    }
+    game.companion = null;
+    game.companionBullets = [];
     setState(S.DYING);
     clearInput();
     hideScreens();
@@ -3212,6 +4227,7 @@
   function showGameOver() {
     if (!game || game.gameOverShown || state !== S.DYING) return;
     game.gameOverShown = true;
+    cleanupEventOnGameOver();
     setState(S.GAMEOVER);
     hideScreens();
     clearInput();
@@ -3696,7 +4712,30 @@
       }
 
       let hitSomething = false;
+
+      // 特殊事件 Boss 不在普通 enemies 数组中，单独参与玩家子弹碰撞。
+      if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated && !bullet.hits.has('event-boss')) {
+        const eventBoss = game.eventBoss;
+        if (segmentCircleHit(oldX, oldY, nextX, nextY, eventBoss.x, eventBoss.y, eventBoss.r + bullet.radius)) {
+          bullet.hits.add('event-boss');
+          if (bullet.kind === 'rocket') {
+            explode(nextX, nextY, bullet.splashRadius, bullet.splashDamage, bullet);
+            bullet.dead = true;
+            hitSomething = true;
+          } else {
+            damageEventBoss(bullet.damage, { critical: bullet.critical });
+            if (bullet.pierce > 1) {
+              bullet.pierce -= 1;
+            } else {
+              bullet.dead = true;
+              hitSomething = true;
+            }
+          }
+        }
+      }
+
       for (let j = 0; j < enemies.length; j += 1) {
+        if (bullet.dead) break;
         const enemy = enemies[j];
         if (enemy.dead || bullet.hits.has(enemy.uid)) continue;
         if (!segmentCircleHit(oldX, oldY, nextX, nextY, enemy.x, enemy.y, enemy.r + bullet.radius)) {
@@ -3786,6 +4825,16 @@
           pushY: ((enemy.y - y) / Math.max(1, distance)) * 140 * falloff,
           silent: true
         });
+      }
+    }
+
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+      const boss = game.eventBoss;
+      const bossDistance = Math.hypot(boss.x - x, boss.y - y);
+      const bossReach = radius + boss.r;
+      if (bossDistance <= bossReach) {
+        const falloff = clamp(1 - Math.max(0, bossDistance - boss.r * 0.35) / radius, 0.32, 1);
+        damageEventBoss(damage * falloff, { silent: true });
       }
     }
 
@@ -3990,10 +5039,16 @@
     updatePlayerCombat(dt);
     if (state !== S.PLAYING) return;
 
+    updateCompanion(dt);
+    updateEventBoss(dt);
+    if (state !== S.PLAYING) return;
+
     updateSpawning(dt);
     updateEnemies(dt);
     if (state === S.PLAYING) updatePlayerBullets(dt);
     if (state === S.PLAYING) updateEnemyBullets(dt);
+    if (state === S.PLAYING) updateCompanionBullets(dt);
+    if (state !== S.PLAYING) return;
     if (state === S.PLAYING) updateOrbs(dt);
     updateEffects(dt);
     updateTimers(dt);
@@ -4308,8 +5363,10 @@
 
     drawOrbs();
     drawRings();
+    drawEventBossTelegraphs();
     drawCharacters(now);
     drawBullets();
+    drawCompanionBullets();
     drawParticles();
     drawDamageNumbers();
 
@@ -4464,6 +5521,16 @@
       if (!isWorldVisible(enemy.x, enemy.y, enemy.r + 90)) continue;
       drawList.push({ type: 'enemy', y: enemy.y, ref: enemy });
     }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.dead) {
+      if (isWorldVisible(game.eventBoss.x, game.eventBoss.y, game.eventBoss.r + 120)) {
+        drawList.push({ type: 'eventBoss', y: game.eventBoss.y, ref: game.eventBoss });
+      }
+    }
+    if (game.companion && game.companion.active) {
+      if (isWorldVisible(game.companion.x, game.companion.y, game.companion.r + 30)) {
+        drawList.push({ type: 'companion', y: game.companion.y, ref: game.companion });
+      }
+    }
     if (!game.player.dead || state === S.DYING) {
       drawList.push({ type: 'player', y: game.player.y, ref: game.player });
     }
@@ -4472,6 +5539,10 @@
     for (let i = 0; i < drawList.length; i += 1) {
       if (drawList[i].type === 'enemy') {
         drawEnemy(drawList[i].ref, now);
+      } else if (drawList[i].type === 'eventBoss') {
+        drawEventBoss(now);
+      } else if (drawList[i].type === 'companion') {
+        drawCompanion(now);
       } else {
         drawPlayer(now);
       }
@@ -4589,6 +5660,248 @@
       }
     }
 
+    ctx.restore();
+  }
+
+  function drawEventBossTelegraphs() {
+    if (!game || !game.eventBossActive || !game.eventBoss) return;
+    const boss = game.eventBoss;
+    const time = performance.now() * 0.001;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    if (boss.telegraph) {
+      const telegraph = boss.telegraph;
+      const progress = 1 - clamp(telegraph.time / telegraph.total, 0, 1);
+      const pulse = 0.55 + Math.sin(time * 14) * 0.2;
+      const base = telegraph.baseAngle;
+
+      if (telegraph.type === 'fan' || telegraph.type === 'combo') {
+        const half = boss.enraged ? 0.48 : 0.4;
+        ctx.fillStyle = 'rgba(255, 91, 116, ' + (0.035 + progress * 0.05) + ')';
+        ctx.beginPath();
+        ctx.moveTo(boss.x, boss.y);
+        ctx.arc(boss.x, boss.y, 430, base - half, base + half);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 132, 148, ' + (0.2 + progress * 0.28) + ')';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, 55 + progress * 330, base - half, base + half);
+        ctx.stroke();
+        for (let i = -1; i <= 1; i += 1) {
+          ctx.globalAlpha = pulse * 0.55;
+          ctx.beginPath();
+          ctx.moveTo(boss.x, boss.y);
+          ctx.lineTo(boss.x + Math.cos(base + half * i) * 430, boss.y + Math.sin(base + half * i) * 430);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      if (telegraph.type === 'ring' || telegraph.type === 'combo') {
+        const radius = boss.r + 18 + progress * 92;
+        ctx.strokeStyle = 'rgba(255, 207, 102, ' + (0.24 + progress * 0.34) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 8]);
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, radius, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(boss.x, boss.y, boss.r + 8, 0, TAU);
+        ctx.strokeStyle = 'rgba(255, 132, 148, 0.3)';
+        ctx.stroke();
+      }
+
+      if (telegraph.type === 'delayed') {
+        for (let i = 0; i < telegraph.markers.length; i += 1) {
+          const marker = telegraph.markers[i];
+          ctx.strokeStyle = 'rgba(255, 173, 84, ' + (0.45 + progress * 0.35) + ')';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(marker.x, marker.y, 38, 0, TAU);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(marker.x, marker.y, 10 + progress * 22, 0, TAU);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(marker.x - 52, marker.y);
+          ctx.lineTo(marker.x + 52, marker.y);
+          ctx.moveTo(marker.x, marker.y - 52);
+          ctx.lineTo(marker.x, marker.y + 52);
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 173, 84, ' + (0.035 + progress * 0.06) + ')';
+          ctx.beginPath();
+          ctx.arc(marker.x, marker.y, 36, 0, TAU);
+          ctx.fill();
+        }
+      }
+
+      if (telegraph.type === 'spiral') {
+        for (let i = 0; i < 3; i += 1) {
+          ctx.strokeStyle = 'rgba(201, 167, 255, ' + (0.24 + progress * 0.25) + ')';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(
+            boss.x,
+            boss.y,
+            boss.r + 22 + i * 16,
+            time * 2 + i * 2.1,
+            time * 2 + i * 2.1 + Math.PI * 1.15
+          );
+          ctx.stroke();
+        }
+      }
+    }
+
+    if (boss.spiral) {
+      ctx.strokeStyle = 'rgba(201, 167, 255, 0.28)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 2; i += 1) {
+        ctx.beginPath();
+        ctx.arc(
+          boss.x,
+          boss.y,
+          boss.r + 18 + i * 12,
+          boss.spiral.angle + i * Math.PI,
+          boss.spiral.angle + i * Math.PI + Math.PI * 0.7
+        );
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function drawEventBoss(now) {
+    if (!game || !game.eventBoss) return;
+    const boss = game.eventBoss;
+    if (boss.defeated) return;
+    const time = now * 0.001;
+    const spawnScale = boss.spawnT > 0 ? 0.55 + (1 - clamp(boss.spawnT / 1.25, 0, 1)) * 0.45 : 1;
+    const radius = boss.r * spawnScale;
+    const color = boss.enraged ? '#ff5a78' : '#ff8b72';
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.46)';
+    ctx.beginPath();
+    ctx.ellipse(boss.x, boss.y + boss.r * 0.76, boss.r * 0.95, boss.r * 0.35, 0, 0, TAU);
+    ctx.fill();
+
+    const aura = ctx.createRadialGradient(boss.x, boss.y, boss.r * 0.4, boss.x, boss.y, boss.r * 2.4);
+    aura.addColorStop(0, boss.enraged ? 'rgba(255, 65, 105, 0.26)' : 'rgba(255, 126, 111, 0.18)');
+    aura.addColorStop(0.55, 'rgba(180, 107, 255, 0.1)');
+    aura.addColorStop(1, 'rgba(255, 79, 109, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(boss.x, boss.y, boss.r * 2.4, 0, TAU);
+    ctx.fill();
+
+    ctx.save();
+    ctx.translate(boss.x, boss.y);
+    ctx.rotate(time * 0.55);
+    ctx.strokeStyle = boss.enraged ? 'rgba(255, 95, 123, 0.6)' : 'rgba(255, 207, 102, 0.45)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 14; i += 1) {
+      const angle = (i / 14) * TAU;
+      const inner = boss.r * 1.22;
+      const outer = boss.r * (1.36 + (i % 2) * 0.14);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+      ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    drawCircularAvatar(eventAvatar, boss.x, boss.y, radius, color, {
+      ringWidth: 4,
+      dashed: boss.enraged
+    });
+
+    if (boss.hitFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = clamp(boss.hitFlash * 5, 0, 0.65);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, radius + 2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (boss.castFlash > 0) {
+      ctx.save();
+      ctx.globalAlpha = clamp(boss.castFlash * 2.2, 0, 0.7);
+      ctx.strokeStyle = '#ffcf66';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(boss.x, boss.y, radius + 16 + (1 - boss.castFlash / 0.28) * 34, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (view.w >= 1180) {
+      ctx.textAlign = 'center';
+      setFont(11, 900);
+      ctx.fillStyle = '#fff1e9';
+      ctx.fillText(boss.name, boss.x, boss.y - radius - 19);
+      setMonoFont(7.5, 700);
+      ctx.fillStyle = boss.enraged ? '#ff8ea1' : '#ffcf66';
+      ctx.fillText(boss.enraged ? 'PHASE II · CHOICE SHADOW' : 'CHOICE SHADOW', boss.x, boss.y - radius - 7);
+    }
+    ctx.restore();
+  }
+
+  function drawCompanion(now) {
+    if (!game || !game.companion || !game.companion.active) return;
+    const companion = game.companion;
+    const bob = Math.sin(now * 0.004 + companion.bob) * 2.8;
+    const y = companion.y + bob;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.beginPath();
+    ctx.ellipse(companion.x, companion.y + 21, 23, 8, 0, 0, TAU);
+    ctx.fill();
+
+    const aura = ctx.createRadialGradient(companion.x, y, 4, companion.x, y, 40);
+    aura.addColorStop(0, 'rgba(255, 207, 102, 0.22)');
+    aura.addColorStop(1, 'rgba(255, 207, 102, 0)');
+    ctx.fillStyle = aura;
+    ctx.beginPath();
+    ctx.arc(companion.x, y, 40, 0, TAU);
+    ctx.fill();
+
+    drawCircularAvatar(eventAvatar, companion.x, y, 18, '#ffcf66', { ringWidth: 2.4 });
+    ctx.textAlign = 'center';
+    setFont(7, 700);
+    ctx.fillStyle = 'rgba(255, 225, 166, 0.82)';
+    ctx.fillText('吴朝阳', companion.x, y + 35);
+    ctx.fillStyle = 'rgba(255, 139, 176, 0.9)';
+    setFont(9, 900);
+    ctx.fillText('♥', companion.x, y - 26 - Math.sin(now * 0.004 + 1.2) * 2);
+    ctx.restore();
+  }
+
+  function drawCompanionBullets() {
+    if (!game || game.companionBullets.length === 0) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < game.companionBullets.length; i += 1) {
+      const bullet = game.companionBullets[i];
+      if (!isWorldVisible(bullet.x, bullet.y, 50)) continue;
+      drawBulletTrail(bullet, '#ffcf66', 2.2);
+      ctx.fillStyle = '#fff4c8';
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 2.6, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#ffcf66';
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, 8, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 
@@ -4804,6 +6117,20 @@
       if (!isWorldVisible(bullet.x, bullet.y, 80)) continue;
       drawBulletTrail(bullet, bullet.color, bullet.radius);
       const pulse = 1 + Math.sin(performance.now() * 0.02 + i) * 0.14;
+      if (bullet.eventBoss) {
+        ctx.globalAlpha = 0.16;
+        ctx.fillStyle = bullet.color;
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius * 3.5 * pulse, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = bullet.color;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, bullet.radius * 1.9, 0, TAU);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       ctx.fillStyle = bullet.color;
       ctx.globalAlpha = 0.34;
       ctx.beginPath();
@@ -5003,6 +6330,7 @@
      ======================================================= */
   function weaponObjectiveText() {
     if (!game) return '';
+    if (game.eventBossActive) return '吴朝阳 · 抉择之影';
     if (game.mode === 'stage') {
       if (game.stageState === 'boss') return 'BOSS 战 · 击败暴走的好兄弟';
       if (game.stageState === 'transition') return '关卡完成 · 正在进入下一关';
@@ -5024,6 +6352,7 @@
     }
 
     drawBossHUD();
+    drawEventBossHUD();
     drawCoinReward();
     drawToasts();
     drawTutorial();
@@ -5364,6 +6693,55 @@
     ctx.textAlign = 'right';
     ctx.fillStyle = '#8da2b1';
     ctx.fillText('阶段 ' + (boss.enraged ? 'Ⅱ' : 'Ⅰ'), x + w, barY + 24);
+  }
+
+  function drawEventBossHUD() {
+    if (!game || !game.eventBoss || !game.eventBossActive || game.eventBoss.dead) return;
+    const boss = game.eventBoss;
+    const compact = view.w < 1180;
+    const w = compact ? view.w - 24 : Math.min(680, view.w - 480);
+    const x = view.w * 0.5 - w * 0.5;
+    const barY = compact ? (view.w < 390 ? 208 : 182) : view.h - 104;
+    const labelY = barY - 7;
+    const accent = boss.enraged ? '#ff5a78' : '#ff8b72';
+
+    drawPanel(x - 10, barY - 24, w + 20, 54, 12, 'rgba(9,11,18,0.88)', 'rgba(255,107,125,0.32)');
+    ctx.textAlign = 'left';
+    setFont(11, 850);
+    ctx.fillStyle = '#ffe7e5';
+    ctx.fillText('☠ ' + boss.name + ' · ' + boss.title, x, labelY);
+    ctx.textAlign = 'right';
+    setMonoFont(9, 700);
+    ctx.fillStyle = boss.enraged ? '#ff734f' : '#ff9eaa';
+    ctx.fillText(boss.enraged ? 'PHASE II' : 'PHASE I', x + w, labelY);
+
+    const ratio = clamp(boss.hp / boss.maxHp, 0, 1);
+    drawBar(x, barY + 3, w, 11, ratio, accent, '#ffcf66', 'rgba(255,255,255,0.08)');
+    setMonoFont(8, 700);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff0f2';
+    ctx.fillText(
+      formatNumber(Math.max(0, boss.hp)) + ' / ' + formatNumber(boss.maxHp),
+      x + w * 0.5,
+      barY + 12
+    );
+
+    ctx.textAlign = 'left';
+    setFont(8.5, 600);
+    ctx.fillStyle = '#7f8fa2';
+    const warning = boss.telegraph
+      ? ({
+        fan: '扇形弹幕预警',
+        ring: '环形扩散预警',
+        delayed: '延迟追踪预警',
+        spiral: '螺旋弹幕预警',
+        combo: '组合弹幕预警'
+      }[boss.telegraph.type] || '弹幕预警')
+      : boss.spiral ? '螺旋弹幕持续中' : '观察预警，寻找躲避窗口';
+    ctx.fillText(warning, x, barY + 24);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#8da2b1';
+    ctx.fillText('事件 Boss', x + w, barY + 24);
   }
 
   function drawCoinReward() {

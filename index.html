@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#06090f">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="《吴卓远大战代牧豪》是一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。WASD 移动、鼠标瞄准射击，解锁手枪、冲锋枪、霰弹枪、狙击枪和火箭筒，在无限生存与关卡挑战中击败精英追兵和 BOSS。通关赚取金币，解锁并装备五款角色皮肤。支持电脑与手机，免费在线玩。">
-  <meta name="keywords" content="吴卓远大战代牧豪,吴卓远,代牧豪,2D射击游戏,俯视角射击,网页游戏,在线小游戏,HTML5游戏,Canvas游戏,生存射击,无限生存,枪战游戏,BOSS战,金币系统,皮肤商城,角色皮肤,免费网页游戏">
+  <meta name="description" content="《吴卓远大战代牧豪》是一款可直接在浏览器游玩的 2D 俯视角生存射击网页游戏。WASD 移动、鼠标瞄准射击，解锁手枪、冲锋枪、霰弹枪、狙击枪和火箭筒，在无限生存与关卡挑战中击败精英追兵和 BOSS。通关赚取金币，解锁并装备五款角色皮肤，并在第三关遭遇“吴朝阳的抉择”随机事件。支持电脑与手机，免费在线玩。">
+  <meta name="keywords" content="吴卓远大战代牧豪,吴卓远,代牧豪,2D射击游戏,俯视角射击,网页游戏,在线小游戏,HTML5游戏,Canvas游戏,生存射击,无限生存,枪战游戏,BOSS战,金币系统,皮肤商城,角色皮肤,随机事件,吴朝阳,随行伙伴,免费网页游戏">
   <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1">
   <meta name="googlebot" content="index,follow,max-image-preview:large">
   <meta name="author" content="吴卓远大战代牧豪">
@@ -37,13 +37,15 @@
   <link id="canonicalLink" rel="canonical" href="https://qianfanqqq.github.io/wuzhuoyuan-vs-daimuhao/">
   <link rel="sitemap" type="application/xml" title="Sitemap" href="sitemap.xml">
   <link rel="manifest" href="site.webmanifest">
-  <link rel="preload" as="image" href="assets/skins/edg.png?v=20261020-2" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/enemy.png?v=20261020-2" fetchpriority="high">
-  <link rel="preload" as="image" href="assets/bullets/edg2026-pomegranate.png?v=20261020-2">
-  <link rel="preload" as="image" href="assets/bullets/korean-kimchi.png?v=20261020-2">
-  <link rel="preload" as="image" href="assets/bullets/bride-flower.png?v=20261020-2">
-  <link rel="preload" as="image" href="assets/bullets/nun-black-sword.png?v=20261020-2">
-  <link rel="stylesheet" href="style.css?v=20261020-2">
+  <link rel="preload" as="image" href="assets/skins/edg.png?v=20261020-3" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/enemy.png?v=20261020-3" fetchpriority="high">
+  <link rel="preload" as="image" href="assets/bullets/edg2026-pomegranate.png?v=20261020-3">
+  <link rel="preload" as="image" href="assets/bullets/korean-kimchi.png?v=20261020-3">
+  <link rel="preload" as="image" href="assets/bullets/bride-flower.png?v=20261020-3">
+  <link rel="preload" as="image" href="assets/bullets/nun-black-sword.png?v=20261020-3">
+  <link rel="preload" as="image" href="assets/events/wuchaoyang-portrait.jpg?v=20261020-3">
+  <link rel="preload" as="image" href="assets/events/wuchaoyang-avatar.jpg?v=20261020-3">
+  <link rel="stylesheet" href="style.css?v=20261020-3">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%230b1119' stroke='%235de1ff' stroke-width='4'/%3E%3Ccircle cx='32' cy='24' r='10' fill='%235de1ff'/%3E%3Cpath d='M14 55c2-13 9-19 18-19s16 6 18 19' fill='%235de1ff'/%3E%3C/svg%3E">
   <link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
@@ -180,7 +182,7 @@
               <div class="wallet-copy"><span>金币余额</span><strong id="menuCoins">0</strong></div>
             </div>
             <div class="equipped-tile">
-              <img id="menuSkinImage" src="assets/skins/edg.png?v=20261020-2" alt="当前装备皮肤">
+              <img id="menuSkinImage" src="assets/skins/edg.png?v=20261020-3" alt="当前装备皮肤">
               <div class="wallet-copy"><span>当前皮肤</span><strong id="menuSkinName">EDG</strong></div>
             </div>
           </div>
@@ -331,6 +333,57 @@
       </div>
     </section>
 
+    <!-- ===================== 随机事件：吴朝阳的抉择 ===================== -->
+    <section id="eventScreen" class="screen overlay-screen event-screen" aria-label="随机事件：吴朝阳的抉择">
+      <div class="event-panel" id="eventPanel">
+        <div class="event-portrait-col">
+          <div class="event-portrait-frame" id="eventPortraitFrame">
+            <div class="event-portrait-fallback" aria-hidden="true">吴</div>
+            <img id="eventPortrait" alt="吴朝阳立绘">
+            <div class="event-portrait-vignette" aria-hidden="true"></div>
+            <div class="event-portrait-stamp">EVENT 01</div>
+            <div class="event-hearts" id="eventHearts" aria-hidden="true"></div>
+          </div>
+          <div class="event-affinity">
+            <div class="event-affinity-label"><span>好感度</span><strong id="eventAffinityValue">0</strong></div>
+            <div class="event-affinity-track"><span id="eventAffinityFill"></span></div>
+            <span class="event-affinity-note" id="eventAffinityNote">随行伙伴：未解锁</span>
+          </div>
+        </div>
+        <div class="event-copy">
+          <div class="event-topline">
+            <span class="eyebrow">RANDOM EVENT · 第三关之后</span>
+            <span class="panel-tag">STORY</span>
+          </div>
+          <div class="event-speaker">
+            <h2 id="eventName">吴朝阳</h2>
+            <span id="eventRole">第三关尽头的不速之客</span>
+          </div>
+          <p class="event-text" id="eventText" aria-live="polite"></p>
+          <div class="event-choices" id="eventChoices"></div>
+          <div class="event-footer" id="eventFooter"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 事件奖励 ===================== -->
+    <section id="eventRewardScreen" class="screen overlay-screen event-screen event-reward-screen" aria-label="吴朝阳的抉择：战斗奖励">
+      <div class="event-reward-panel">
+        <div class="event-reward-head">
+          <p class="eyebrow">EVENT CLEAR · 吴朝阳的抉择</p>
+          <h2 id="eventRewardTitle">战斗胜利</h2>
+          <p id="eventRewardText">你击败了抉择之影，获得了一次选择强化词条的机会。</p>
+        </div>
+        <div class="event-coin-award">
+          <span class="coin-orb" aria-hidden="true">◆</span>
+          <div><span>金币奖励</span><strong id="eventCoinReward">+500</strong></div>
+          <small id="eventCoinNote">首次击败奖励</small>
+        </div>
+        <div id="eventRewardCards" class="event-reward-cards"></div>
+        <div id="eventRewardFooter" class="event-reward-footer"></div>
+      </div>
+    </section>
+
     <!-- ===================== 操作说明 ===================== -->
     <div id="instructionsModal" class="modal" hidden>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="instructionsTitle">
@@ -404,6 +457,7 @@
     </div>
   </div>
 
-  <script src="game.js?v=20261020-2" defer></script>
+  <script src="events.js?v=20261020-3" defer></script>
+  <script src="game.js?v=20261020-3" defer></script>
 </body>
 </html>
