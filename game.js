@@ -28,18 +28,16 @@
       projectileSpeed: 540,
       projectileLife: 1.6,
       projectileRadius: 12,
-      cooldown: 12,
+      cooldown: 8,
       charmDuration: 10
     }, BRIDE_SKILL_DEFS.q || {}),
     e: Object.assign({
-      projectileSpeed: 560,
-      projectileLife: 1.8,
-      projectileRadius: 11,
-      cooldown: 14,
-      linkRadius: 190,
-      maxLinks: 4,
-      duration: 6,
-      shareRatio: 0.35
+      cooldown: 12,
+      duration: 5,
+      speedMultiplier: 2,
+      impactWeaponScale: 1.5,
+      impactStageDamage: 8,
+      hitInterval: 0.35
     }, BRIDE_SKILL_DEFS.e || {}),
     r: Object.assign({
       cooldown: 50,
@@ -916,8 +914,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-25';
-  const BULLET_VERSION = '20261020-25';
+  const AVATAR_VERSION = '20261020-26';
+  const BULLET_VERSION = '20261020-26';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1252,7 +1250,14 @@
           { side: 1, punch: 0, aimAngle: 0, broken: false }
         ]
       },
-      e: { cooldown: 0, active: 0 },
+      e: {
+        cooldown: 0,
+        active: 0,
+        dashing: false,
+        invulnBase: 0,
+        hitTimers: Object.create(null),
+        trailTimer: 0
+      },
       r: {
         baseKills: Math.max(0, Math.floor(Number(kills) || 0)),
         pendingShots: 0,
@@ -3018,9 +3023,9 @@
         lines.push('粉白爱心命中普通敌人后魅惑 10 秒；Boss 免疫魅惑。');
         lines.push('同一时间最多控制 1 名敌人；魅惑敌人会攻击其他敌人，10 秒后自动死亡。');
       } else if (slot === 'e') {
-        lines.push('命中普通敌人后留下玫瑰红吻痕，连接半径 190 内最多 4 名敌人。');
-        lines.push('连接持续 6 秒；目标受到伤害的 35% 由其他连接目标分担。');
-        lines.push('目标死亡后自动清理并尝试转移连接，Boss 可以参与分摊但不会被魅惑。');
+        lines.push('持续 5 秒，移速提升至当前速度的 2 倍，并获得完整无敌。');
+        lines.push('疾袭期间接触敌人造成伤害；碰撞范围严格按玩家和敌人半径计算，同一敌人每 0.35 秒最多命中一次。');
+        lines.push('伤害基于当前武器最终攻击力和关卡数；结束、死亡或切换形态会解除无敌并恢复正常移速。');
       } else if (slot === 'r') {
         lines.push('持续 20 秒，冷却 50 秒；每 5 秒恢复 5 HP，最多恢复 20 HP。');
         lines.push('以玩家为中心、半径 380 的圣焰每秒灼烧敌人；伤害与当前武器和关卡有关。');
@@ -3331,8 +3336,15 @@
       });
     }
     if (game.player && game.player.skills) {
-      game.player.skills.e.active = 0;
-      game.player.skills.r.active = 0;
+      const brideSkills = game.player.skills;
+      const wasDashing = brideSkills.e.active > 0;
+      brideSkills.e.active = 0;
+      brideSkills.e.dashing = false;
+      brideSkills.e.invulnBase = 0;
+      brideSkills.e.hitTimers = Object.create(null);
+      brideSkills.e.trailTimer = 0;
+      if (wasDashing) game.player.invuln = 0;
+      brideSkills.r.active = 0;
       game.player.skills.r.healTimer = 0;
       game.player.skills.r.healTicks = 0;
       game.player.skills.r.burnTimer = 0;
@@ -4239,6 +4251,50 @@
     }
   }
 
+  function brideDashCollide(startX, startY) {
+    if (!game || !game.player || !isBrideForm()) return;
+    const p = game.player;
+    const e = p.skills.e;
+    if (!e.dashing || e.active <= 0) return;
+    const stats = getWeaponStats(p.weapon);
+    const damage = Math.max(1, Math.round(stats.damage * BRIDE_CONFIG.e.impactWeaponScale + (game.stage || 1) * BRIDE_CONFIG.e.impactStageDamage));
+    const interval = BRIDE_CONFIG.e.hitInterval;
+    const tryHit = function (enemy, key, isEventBoss) {
+      if (!enemy || enemy.dead || enemy.charmed) return;
+      if ((e.hitTimers[key] || 0) > 0) return;
+      const hit = (startX === p.x && startY === p.y)
+        ? Math.hypot(enemy.x - p.x, enemy.y - p.y) <= p.r + enemy.r
+        : segmentCircleHit(startX, startY, p.x, p.y, enemy.x, enemy.y, p.r + enemy.r);
+      if (!hit) return;
+      e.hitTimers[key] = interval;
+      damageEnemy(enemy, damage, {
+        critical: false,
+        silent: true,
+        pushX: (enemy.x - p.x) * 0.45,
+        pushY: (enemy.y - p.y) * 0.45
+      });
+      addRing(enemy.x, enemy.y, enemy.r + 10, '#fffaf0', 0.25, 2);
+      for (let i = 0; i < 5; i += 1) {
+        const a = rand(0, TAU);
+        spawnParticle(enemy.x, enemy.y, Math.cos(a) * rand(25, 90), Math.sin(a) * rand(25, 90), rand(0.2, 0.45), rand(2, 4), Math.random() < 0.7 ? '#fffdf7' : '#ffcf66', true);
+      }
+    };
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      tryHit(game.enemies[i], game.enemies[i].uid, false);
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+      const boss = game.eventBoss;
+      const hit = (startX === p.x && startY === p.y)
+        ? Math.hypot(boss.x - p.x, boss.y - p.y) <= p.r + boss.r
+        : segmentCircleHit(startX, startY, p.x, p.y, boss.x, boss.y, p.r + boss.r);
+      if (hit && (e.hitTimers.eventBoss || 0) <= 0) {
+        e.hitTimers.eventBoss = interval;
+        damageEventBoss(damage, { critical: false });
+        addRing(boss.x, boss.y, boss.r + 10, '#fffaf0', 0.25, 2);
+      }
+    }
+  }
+
   function castBrideSkill(slot, form, def) {
     if (!game || !game.player || game.player.dead) return false;
     const p = game.player;
@@ -4256,10 +4312,17 @@
     }
 
     if (slot === 'e') {
-      if (skills.e.active > 0 || skills.e.cooldown > 0) return false;
+      if (skills.e.active > 0 || skills.e.cooldown > 0 || skills.e.dashing) return false;
+      if (game.brideLink) endBrideLink(false);
+      skills.e.active = BRIDE_CONFIG.e.duration;
       skills.e.cooldown = BRIDE_CONFIG.e.cooldown;
-      spawnBrideProjectile('brideMark');
-      addToast('E · 命定红线', 'good', 1.2);
+      skills.e.dashing = true;
+      skills.e.invulnBase = p.invuln;
+      skills.e.hitTimers = Object.create(null);
+      skills.e.trailTimer = 0;
+      p.invuln = Math.max(p.invuln, BRIDE_CONFIG.e.duration);
+      addRing(p.x, p.y, p.r + 14, '#fffaf0', 0.5, 3);
+      addToast('E · 圣羽疾袭 · 移速翻倍 / 无敌 5 秒', 'good', 1.6);
       pulseSkillSlot('e');
       refreshSkillBar(true);
       return true;
@@ -4290,7 +4353,44 @@
     const r = skills.r;
     r.cooldown = Math.max(0, r.cooldown - dt);
 
-    if (game.brideLink) updateBrideLink(dt);
+    const e = skills.e;
+    Object.keys(e.hitTimers).forEach(function (key) {
+      e.hitTimers[key] = Math.max(0, e.hitTimers[key] - dt);
+    });
+    if (e.dashing) {
+      if (e.active > 0) {
+        p.invuln = Math.max(p.invuln, e.active);
+        e.trailTimer -= dt;
+        if (e.trailTimer <= 0) {
+          e.trailTimer = 0.055;
+          for (let i = 0; i < 2; i += 1) {
+            spawnParticle(
+              p.x + rand(-p.r, p.r),
+              p.y + rand(-p.r, p.r),
+              rand(-35, 35),
+              rand(-35, 35),
+              rand(0.25, 0.55),
+              rand(2, 4),
+              Math.random() < 0.7 ? '#fffdf7' : '#ffcf66',
+              true
+            );
+          }
+        }
+      } else {
+        e.dashing = false;
+        e.active = 0;
+        e.hitTimers = Object.create(null);
+        e.trailTimer = 0;
+        p.invuln = Math.max(0, e.invulnBase - (BRIDE_CONFIG.e.duration - e.active));
+        addRing(p.x, p.y, p.r + 18, '#fffaf0', 0.5, 3);
+        addToast('圣羽收拢 · 恢复常态', 'info', 1.3);
+        for (let i = 0; i < 12; i += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(p.x, p.y, Math.cos(a) * rand(30, 150), Math.sin(a) * rand(30, 150), rand(0.3, 0.7), rand(2, 4), Math.random() < 0.7 ? '#fffdf7' : '#ffcf66', true);
+        }
+        refreshSkillBar(true);
+      }
+    }
 
     if (r.active > 0) {
       r.burnTimer -= dt;
@@ -4698,6 +4798,9 @@
   function updatePlayerMovement(dt) {
     const p = game.player;
     if (p.dead) return;
+    const startX = p.x;
+    const startY = p.y;
+    const dashActive = isBrideForm() && p.skills && p.skills.e.dashing && p.skills.e.active > 0;
 
     p.dashCd = Math.max(0, p.dashCd - dt);
     p.invuln = Math.max(0, p.invuln - dt);
@@ -4723,7 +4826,8 @@
       const move = getMoveVector();
       p.moving = move.length > 0.05;
       if (p.moving) {
-        const speed = p.baseSpeed * p.moveSpeedMult;
+        p.lastMoveAngle = Math.atan2(move.y, move.x);
+        const speed = p.baseSpeed * p.moveSpeedMult * (dashActive ? BRIDE_CONFIG.e.speedMultiplier : 1);
         p.x += move.x * speed * dt;
         p.y += move.y * speed * dt;
         p.walkPhase += dt * (7.5 + speed * 0.012);
@@ -4732,6 +4836,7 @@
     }
 
     clampToMap(p);
+    if (dashActive) brideDashCollide(startX, startY);
   }
 
   function updatePlayerCombat(dt) {
@@ -9146,6 +9251,7 @@
     }
 
     drawBrideWings(now);
+    drawBrideDashAura(now);
     const koreanMelee = isKoreanForm() && isKoreanMeleeActive();
     if (!koreanMelee) drawPlayerWeapon(p, renderY);
     if (koreanMelee) drawKoreanArms(now);
@@ -9635,6 +9741,38 @@
         ctx.restore();
       }
     }
+  }
+
+  function drawBrideDashAura(now) {
+    if (!game || !game.player || !isBrideForm()) return;
+    const p = game.player;
+    const e = p.skills.e;
+    if (!e || !e.dashing || e.active <= 0 || p.dead) return;
+    const time = now * 0.001;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(p.x, p.y, p.r * 0.4, p.x, p.y, p.r * 2.4);
+    glow.addColorStop(0, 'rgba(255,253,247,0.2)');
+    glow.addColorStop(1, 'rgba(255,207,102,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 2.4, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,250,240,0.7)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r + 6 + Math.sin(time * 9) * 2, 0, TAU);
+    ctx.stroke();
+    const angle = p.lastMoveAngle || p.aimAngle;
+    for (let i = 0; i < 4; i += 1) {
+      const bx = p.x - Math.cos(angle) * (p.r + 10 + i * 11);
+      const by = p.y - Math.sin(angle) * (p.r + 10 + i * 11) + Math.sin(time * 10 + i) * 4;
+      ctx.fillStyle = i % 2 ? 'rgba(255,253,247,0.55)' : 'rgba(255,207,102,0.32)';
+      ctx.beginPath();
+      ctx.ellipse(bx, by, 3.5, 10, angle + Math.PI * 0.5, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawBrideWings(now) {

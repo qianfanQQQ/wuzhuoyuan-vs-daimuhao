@@ -194,7 +194,7 @@
           name: '心动契约',
           icon: 'assets/skills/bride-q.svg',
           effect: 'brideCharm',
-          cooldown: 12,
+          cooldown: 8,
           charmDuration: 10,
           maxTargets: 1,
           desc: '发射粉白爱心，命中普通敌人后魅惑 10 秒；Boss 免疫。'
@@ -204,15 +204,16 @@
           key: 'e',
           code: 'KeyE',
           keyLabel: 'E',
-          name: '命定红线',
+          name: '圣羽疾袭',
           icon: 'assets/skills/bride-e.svg',
-          effect: 'brideLink',
-          cooldown: 14,
-          duration: 6,
-          linkRadius: 190,
-          maxLinks: 4,
-          shareRatio: 0.35,
-          desc: '命中普通敌人后留下吻痕，并连接附近敌人形成红线网络，分担部分伤害。'
+          effect: 'brideDash',
+          cooldown: 12,
+          duration: 5,
+          speedMultiplier: 2,
+          impactWeaponScale: 1.5,
+          impactStageDamage: 8,
+          hitInterval: 0.35,
+          desc: '化为圣羽高速冲刺 5 秒，移速翻倍并免疫伤害；撞击敌人造成接触伤害。'
         },
         r: {
           slot: 'R',
