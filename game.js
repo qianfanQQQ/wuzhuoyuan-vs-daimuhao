@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-18';
-  const BULLET_VERSION = '20261020-18';
+  const AVATAR_VERSION = '20261020-19';
+  const BULLET_VERSION = '20261020-19';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1204,7 +1204,14 @@
         elapsed: 0,
         armCount: 0,
         attackTimer: 0,
-        swing: 0
+        swing: 0,
+        nextArm: 0,
+        removedSide: 0,
+        aguhTimer: 0,
+        arms: [
+          { side: -1, punch: 0, aimAngle: 0, broken: false },
+          { side: 1, punch: 0, aimAngle: 0, broken: false }
+        ]
       },
       e: { cooldown: 0, active: 0 },
       r: {
@@ -3131,6 +3138,14 @@
       skills.q.armCount = 0;
       skills.q.attackTimer = 0;
       skills.q.swing = 0;
+      skills.q.aguhTimer = 0;
+      skills.q.removedSide = 0;
+      if (skills.q.arms) {
+        skills.q.arms.forEach(function (arm) {
+          arm.punch = 0;
+          arm.broken = false;
+        });
+      }
       skills.r.ult = null;
       skills.r.castLock = 0;
     }
@@ -3190,6 +3205,8 @@
         q.armCount = 0;
         q.attackTimer = 0;
         q.swing = 0;
+        q.aguhTimer = 0;
+        if (q.arms) q.arms.forEach(function (arm) { arm.punch = 0; arm.broken = false; });
         p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
         addToast('Q · 双臂收回', 'info', 1.2);
         refreshSkillBar(true);
@@ -3359,8 +3376,8 @@
       damageEnemy(target, damage, {
         critical: false,
         silent: true,
-        pushX: (target.x - x) * 1.2,
-        pushY: (target.y - y) * 1.2
+        pushX: (target.x - x) * 0.12,
+        pushY: (target.y - y) * 0.12
       });
     }
     addRing(x, y, 18, '#5de1ff', 0.24, 2);
@@ -3371,6 +3388,23 @@
     const p = game.player;
     const q = p.skills.q;
     const target = findNearestEnemy(p.x, p.y, 120);
+    let arm = null;
+    if (q.arms && q.arms.length) {
+      if (target) {
+        const side = target.x < p.x ? -1 : 1;
+        arm = q.arms.find(function (item) {
+          return !item.broken && item.side === side;
+        }) || q.arms.find(function (item) { return !item.broken; }) || null;
+      } else {
+        arm = q.arms[q.nextArm] || q.arms[0];
+        if (arm.broken) arm = q.arms.find(function (item) { return !item.broken; }) || null;
+      }
+      if (arm) {
+        q.nextArm = arm.side < 0 ? 1 : 0;
+        arm.punch = 1;
+        arm.aimAngle = target ? Math.atan2(target.y - p.y, target.x - p.x) : p.aimAngle;
+      }
+    }
     q.swing = 1;
     if (!target) return;
     p.aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
@@ -3407,6 +3441,16 @@
       skills.q.armCount = 2;
       skills.q.attackTimer = 0;
       skills.q.swing = 0;
+      skills.q.nextArm = 0;
+      skills.q.removedSide = 0;
+      skills.q.aguhTimer = 0;
+      if (skills.q.arms) {
+        skills.q.arms.forEach(function (arm, index) {
+          arm.punch = 0;
+          arm.broken = false;
+          arm.aimAngle = p.aimAngle + (index === 0 ? -0.2 : 0.2);
+        });
+      }
       cancelReload();
       p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
       addRing(p.x, p.y, p.r + 12, '#5de1ff', 0.5, 3);
@@ -3593,9 +3637,24 @@
       if (q.phase === 'two' && q.elapsed >= 3) {
         q.phase = 'one';
         q.armCount = 1;
+        q.removedSide = 1;
+        q.aguhTimer = 2.2;
         q.attackTimer = 0;
+        if (q.arms && q.arms[1]) q.arms[1].broken = true;
         addToast('阿一古！断了一条手臂，攻速翻倍', 'warn', 2.2);
         addRing(p.x, p.y, p.r + 16, '#ff5f6d', 0.5, 3);
+        for (let i = 0; i < 18; i += 1) {
+          spawnParticle(
+            p.x + p.r * 0.8,
+            p.y,
+            rand(-30, 220),
+            rand(-170, 120),
+            rand(0.3, 0.7),
+            rand(2, 6),
+            Math.random() < 0.5 ? '#ff7a5c' : '#5de1ff',
+            true
+          );
+        }
         audio.play('boss_warn');
       }
       q.attackTimer -= dt;
@@ -3604,12 +3663,20 @@
         koreanMeleeAttack();
       }
       q.swing = Math.max(0, q.swing - dt * 4.5);
+      if (q.arms) {
+        q.arms.forEach(function (arm) {
+          arm.punch = Math.max(0, arm.punch - dt * 3.0);
+        });
+      }
+      q.aguhTimer = Math.max(0, q.aguhTimer - dt);
       if (q.active <= 0) {
         q.phase = 'idle';
         q.elapsed = 0;
         q.armCount = 0;
         q.attackTimer = 0;
         q.swing = 0;
+        q.aguhTimer = 0;
+        if (q.arms) q.arms.forEach(function (arm) { arm.punch = 0; arm.broken = false; });
         p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
         addToast('Q · 双臂收回', 'info', 1.2);
         refreshSkillBar(true);
@@ -3620,6 +3687,8 @@
       q.elapsed = 0;
       q.attackTimer = 0;
       q.swing = 0;
+      q.aguhTimer = 0;
+      if (q.arms) q.arms.forEach(function (arm) { arm.punch = 0; arm.broken = false; });
     }
 
     if (game.koreanZombie) updateKoreanZombie(dt);
@@ -8391,7 +8460,9 @@
       ctx.restore();
     }
 
-    drawPlayerWeapon(p, renderY);
+    const koreanMelee = isKoreanForm() && isKoreanMeleeActive();
+    if (!koreanMelee) drawPlayerWeapon(p, renderY);
+    if (koreanMelee) drawKoreanArms(now);
 
     ctx.globalAlpha = deathAlpha * invulnBlink;
     // 根据当前装备皮肤读取对应图片；中心点与碰撞圆心 (p.x, p.y) 一致。
@@ -8400,9 +8471,9 @@
       dashed: lowHp
     });
 
-    if (isKoreanForm()) drawKoreanArms(now);
+    if (koreanMelee) drawKoreanAguh(now);
 
-    if (p.muzzle > 0) {
+    if (!koreanMelee && p.muzzle > 0) {
       const mx = p.x + Math.cos(p.aimAngle) * (p.r + 29);
       const my = renderY + Math.sin(p.aimAngle) * (p.r + 29);
       const weapon = WEAPONS[p.weapon];
@@ -8433,49 +8504,205 @@
     ctx.restore();
   }
 
+  function drawKoreanArm(side, shoulderX, shoulderY, elbowX, elbowY, handX, handY, punch, time) {
+    const skin = side < 0 ? '#e7a078' : '#f2b58b';
+    const skinDark = side < 0 ? '#b96f52' : '#c57e5d';
+    const outline = '#171820';
+    const angle = Math.atan2(handY - shoulderY, handX - shoulderX);
+
+    if (punch > 0.02) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = punch * 0.55;
+      ctx.strokeStyle = '#54cfff';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(shoulderX, shoulderY, 92, angle - 0.8, angle + 0.8);
+      ctx.stroke();
+      ctx.globalAlpha = punch * 0.28;
+      ctx.strokeStyle = '#d9fbff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(shoulderX, shoulderY, 106, angle - 0.55, angle + 0.55);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 38;
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY);
+    ctx.lineTo(elbowX, elbowY);
+    ctx.stroke();
+    ctx.lineWidth = 30;
+    ctx.beginPath();
+    ctx.moveTo(elbowX, elbowY);
+    ctx.lineTo(handX, handY);
+    ctx.stroke();
+
+    ctx.strokeStyle = skin;
+    ctx.lineWidth = 32;
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY);
+    ctx.lineTo(elbowX, elbowY);
+    ctx.stroke();
+    ctx.lineWidth = 24;
+    ctx.beginPath();
+    ctx.moveTo(elbowX, elbowY);
+    ctx.lineTo(handX, handY);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,235,214,0.45)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(shoulderX, shoulderY - 4);
+    ctx.lineTo(elbowX, elbowY - 3);
+    ctx.lineTo(handX, handY - 2);
+    ctx.stroke();
+
+    // 夸张的肱二头肌/前臂肌肉块，而不是一条普通线条。
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.arc(shoulderX, shoulderY, 16, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = skinDark;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    const bicepX = shoulderX + (elbowX - shoulderX) * 0.56;
+    const bicepY = shoulderY + (elbowY - shoulderY) * 0.56 - side * 2;
+    ctx.beginPath();
+    ctx.ellipse(bicepX, bicepY, 18, 26, angle, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = skinDark;
+    ctx.stroke();
+    const forearmX = elbowX + (handX - elbowX) * 0.45;
+    const forearmY = elbowY + (handY - elbowY) * 0.45;
+    ctx.fillStyle = skin;
+    ctx.beginPath();
+    ctx.ellipse(forearmX, forearmY, 13, 20, angle, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = skinDark;
+    ctx.stroke();
+
+    // 黑色护腕
+    const wristX = handX - Math.cos(angle) * 16;
+    const wristY = handY - Math.sin(angle) * 16;
+    ctx.strokeStyle = '#20232b';
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.moveTo(wristX - Math.cos(angle) * 5, wristY - Math.sin(angle) * 5);
+    ctx.lineTo(wristX + Math.cos(angle) * 5, wristY + Math.sin(angle) * 5);
+    ctx.stroke();
+    ctx.strokeStyle = '#4c9fc4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(wristX - Math.cos(angle) * 5, wristY - Math.sin(angle) * 5);
+    ctx.lineTo(wristX + Math.cos(angle) * 5, wristY + Math.sin(angle) * 5);
+    ctx.stroke();
+
+    // 拳头和拳峰
+    ctx.fillStyle = '#ffe0bd';
+    ctx.strokeStyle = outline;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(handX, handY, 21, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = skinDark;
+    for (let k = -1.5; k <= 1.5; k += 1) {
+      const kx = handX + Math.cos(angle + Math.PI * 0.5) * k * 6 + Math.cos(angle) * 8;
+      const ky = handY + Math.sin(angle + Math.PI * 0.5) * k * 6 + Math.sin(angle) * 8;
+      ctx.beginPath();
+      ctx.arc(kx, ky, 2.4, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   function drawKoreanArms(now) {
     if (!game || !game.player || !game.player.skills) return;
     const p = game.player;
     const q = p.skills.q;
     if (!q || q.active <= 0 || q.armCount <= 0 || p.dead) return;
-    const target = findNearestEnemy(p.x, p.y, 130);
-    const angle = target ? Math.atan2(target.y - p.y, target.x - p.x) : p.aimAngle;
-    const perpX = -Math.sin(angle);
-    const perpY = Math.cos(angle);
-    const reach = 76 + Math.sin(now * 0.03) * 4 + (q.swing > 0 ? 16 : 0);
+    const time = now * 0.001;
+
+    // 中央蓝色能量球；角色头像随后绘制在球心，形成独立的圆形头部。
     ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    for (let i = 0; i < q.armCount; i += 1) {
-      const side = i === 0 ? -1 : 1;
-      const shoulderX = p.x + perpX * side * 13 - Math.cos(angle) * 4;
-      const shoulderY = p.y + perpY * side * 13 - Math.sin(angle) * 4;
-      const handX = p.x + Math.cos(angle) * reach + perpX * side * 18;
-      const handY = p.y + Math.sin(angle) * reach + perpY * side * 18;
-      ctx.strokeStyle = 'rgba(8,13,21,0.72)';
-      ctx.lineWidth = 23;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(shoulderX, shoulderY);
-      ctx.lineTo(handX, handY);
-      ctx.stroke();
-      ctx.strokeStyle = i === 0 ? '#d99a70' : '#f0b88c';
-      ctx.lineWidth = 17;
-      ctx.beginPath();
-      ctx.moveTo(shoulderX, shoulderY);
-      ctx.lineTo(handX, handY);
-      ctx.stroke();
-      ctx.fillStyle = '#ffe0bd';
-      ctx.beginPath();
-      ctx.arc(handX, handY, 14, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = '#7b4c35';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = '#5de1ff';
-      ctx.beginPath();
-      ctx.arc(handX, handY, 4, 0, TAU);
-      ctx.fill();
+    const orb = ctx.createRadialGradient(p.x, p.y, p.r * 0.55, p.x, p.y, p.r * 2.05);
+    orb.addColorStop(0, 'rgba(93,225,255,0.36)');
+    orb.addColorStop(0.55, 'rgba(38,150,255,0.2)');
+    orb.addColorStop(1, 'rgba(18,80,190,0)');
+    ctx.fillStyle = orb;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 2.05, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = 'rgba(114,231,255,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r + 8 + Math.sin(time * 8) * 2, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(80,160,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r + 18 + Math.sin(time * 6 + 1) * 3, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+
+    const target = findNearestEnemy(p.x, p.y, 130);
+    for (let i = 0; i < q.arms.length; i += 1) {
+      const arm = q.arms[i];
+      if (arm.broken) continue;
+      const side = arm.side;
+      const idleBob = Math.sin(time * 7 + side) * 4;
+      const shoulderX = p.x + side * (p.r + 5);
+      const shoulderY = p.y + 1;
+      let elbowX = p.x + side * (p.r + 48);
+      let elbowY = p.y - 38 + idleBob;
+      let handX = p.x + side * (p.r + 98);
+      let handY = p.y + 6 + idleBob;
+      if (target) {
+        const dir = Math.atan2(target.y - p.y, target.x - p.x);
+        const perp = dir + Math.PI * 0.5;
+        const punchHandX = target.x + Math.cos(perp) * side * 8;
+        const punchHandY = target.y + Math.sin(perp) * side * 8;
+        const punchElbowX = p.x + Math.cos(dir) * 48 + Math.cos(perp) * side * 40;
+        const punchElbowY = p.y + Math.sin(dir) * 48 + Math.sin(perp) * side * 40;
+        const blend = clamp(arm.punch * 2.5, 0, 1);
+        handX += (punchHandX - handX) * blend;
+        handY += (punchHandY - handY) * blend;
+        elbowX += (punchElbowX - elbowX) * blend;
+        elbowY += (punchElbowY - elbowY) * blend;
+      }
+      drawKoreanArm(side, shoulderX, shoulderY, elbowX, elbowY, handX, handY, arm.punch, time);
     }
+  }
+
+  function drawKoreanAguh() {
+    if (!game || !game.player || !game.player.skills) return;
+    const p = game.player;
+    const q = p.skills.q;
+    if (!q || q.aguhTimer <= 0 || p.dead) return;
+    const alpha = clamp(q.aguhTimer / 0.22, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(p.x, p.y - 82);
+    ctx.fillStyle = '#f7fbff';
+    ctx.strokeStyle = '#16202a';
+    ctx.lineWidth = 4;
+    roundRectPath(ctx, -58, -26, 116, 46, 12);
+    ctx.moveTo(-8, 20);
+    ctx.lineTo(0, 34);
+    ctx.lineTo(9, 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#14202b';
+    ctx.font = '900 24px "Microsoft YaHei", "PingFang SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('阿一古', 0, 0);
     ctx.restore();
   }
 
