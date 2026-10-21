@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-20';
-  const BULLET_VERSION = '20261020-20';
+  const AVATAR_VERSION = '20261020-21';
+  const BULLET_VERSION = '20261020-21';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1211,6 +1211,7 @@
         nextArm: 0,
         removedSide: 0,
         aguhTimer: 0,
+        invulnBase: 0,
         arms: [
           { side: -1, punch: 0, aimAngle: 0, broken: false },
           { side: 1, punch: 0, aimAngle: 0, broken: false }
@@ -3143,6 +3144,8 @@
       skills.q.swing = 0;
       skills.q.aguhTimer = 0;
       skills.q.removedSide = 0;
+      skills.q.invulnBase = 0;
+      if (game.player) game.player.invuln = 0;
       if (skills.q.arms) {
         skills.q.arms.forEach(function (arm) {
           arm.punch = 0;
@@ -3204,6 +3207,7 @@
         p.shootCd = Math.max(p.shootCd, getWeaponStats(p.weapon).fireInterval);
       } else if (isKoreanForm()) {
         q.phase = 'idle';
+        p.invuln = Math.max(0, (q.invulnBase || 0) - q.elapsed);
         q.elapsed = 0;
         q.armCount = 0;
         q.attackTimer = 0;
@@ -3475,6 +3479,8 @@
       skills.q.nextArm = 0;
       skills.q.removedSide = 0;
       skills.q.aguhTimer = 0;
+      skills.q.invulnBase = p.invuln;
+      p.invuln = Math.max(p.invuln, def.duration);
       if (skills.q.arms) {
         skills.q.arms.forEach(function (arm, index) {
           arm.punch = 0;
@@ -3517,7 +3523,7 @@
 
     if (slot === 'r') {
       if (skills.r.charges < 1) {
-        addToast('R · 还需累计击杀 ' + (50 - skills.r.killProgress) + ' 名敌人', 'warn', 1.4);
+        addToast('R · 还需累计击杀 ' + (48 - skills.r.killProgress) + ' 名敌人', 'warn', 1.4);
         audio.play('denied');
         return false;
       }
@@ -3665,6 +3671,8 @@
 
     if (q.active > 0) {
       q.elapsed += dt;
+      // 复用玩家 invuln：Q 的 6 秒完整覆盖现有所有 damagePlayer 入口。
+      p.invuln = Math.max(p.invuln, q.active);
       if (q.phase === 'two' && q.elapsed >= 3) {
         q.phase = 'one';
         q.armCount = 1;
@@ -3702,6 +3710,7 @@
       q.aguhTimer = Math.max(0, q.aguhTimer - dt);
       if (q.active <= 0) {
         q.phase = 'idle';
+        p.invuln = Math.max(0, (q.invulnBase || 0) - q.elapsed);
         q.elapsed = 0;
         q.armCount = 0;
         q.attackTimer = 0;
@@ -3714,6 +3723,7 @@
       }
     } else if (q.phase !== 'idle') {
       q.phase = 'idle';
+      p.invuln = Math.max(0, (q.invulnBase || 0) - q.elapsed);
       q.armCount = 0;
       q.elapsed = 0;
       q.attackTimer = 0;
@@ -4093,10 +4103,10 @@
     if (isKoreanForm() && game.player.skills) {
       const r = game.player.skills.r;
       r.killProgress += 1;
-      if (r.killProgress >= 50) {
-        const gained = Math.floor(r.killProgress / 50);
+      if (r.killProgress >= 48) {
+        const gained = Math.floor(r.killProgress / 48);
         r.charges += gained;
-        r.killProgress %= 50;
+        r.killProgress %= 48;
         addToast('R · 巨大马头充能 +' + gained, 'good', 1.7);
         audio.play('skill');
       }
@@ -10289,9 +10299,9 @@
           button.title = '天降巨大马头 · 可释放 ' + kr.charges + ' 次';
         } else {
           button.classList.add('is-r-charging');
-          mask.style.height = ((1 - kr.killProgress / 50) * 100).toFixed(1) + '%';
-          timer.textContent = kr.killProgress + '/50';
-          button.title = '天降巨大马头 · 击杀充能 ' + kr.killProgress + '/50';
+          mask.style.height = ((1 - kr.killProgress / 48) * 100).toFixed(1) + '%';
+          timer.textContent = kr.killProgress + '/48';
+          button.title = '天降巨大马头 · 击杀充能 ' + kr.killProgress + '/48';
         }
         return;
       }

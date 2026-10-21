@@ -159,8 +159,8 @@
           name: '天降巨大马头',
           icon: 'assets/skills/korean-r.svg',
           effect: 'koreanHorse',
-          requiredKills: 50,
-          desc: '每击杀 50 名敌人获得一次释放机会；巨大马头砸下，按关卡造成 600/1200/1500/2000 伤害。'
+          requiredKills: 48,
+          desc: '每击杀 48 名敌人获得一次释放机会；巨大马头砸下，按关卡造成 600/1200/1500/2000 伤害。'
         }
       }
     },
