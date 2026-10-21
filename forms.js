@@ -227,7 +227,7 @@
           healInterval: 5,
           healAmount: 5,
           burnInterval: 1,
-          burnRadius: 190,
+          burnRadius: 380,
           burnWeaponScale: 0.5,
           burnStageDamage: 10,
           desc: '展开白翼并持续灼烧周围敌人 20 秒；每 5 秒恢复 5 HP，最多四次。'

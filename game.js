@@ -47,7 +47,7 @@
       healInterval: 5,
       healAmount: 5,
       burnInterval: 1,
-      burnRadius: 190,
+      burnRadius: 380,
       burnWeaponScale: 0.5,
       burnStageDamage: 10
     }, BRIDE_SKILL_DEFS.r || {})
@@ -916,8 +916,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-24';
-  const BULLET_VERSION = '20261020-24';
+  const AVATAR_VERSION = '20261020-25';
+  const BULLET_VERSION = '20261020-25';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -3023,7 +3023,7 @@
         lines.push('目标死亡后自动清理并尝试转移连接，Boss 可以参与分摊但不会被魅惑。');
       } else if (slot === 'r') {
         lines.push('持续 20 秒，冷却 50 秒；每 5 秒恢复 5 HP，最多恢复 20 HP。');
-        lines.push('以玩家为中心、半径 190 的圣焰每秒灼烧敌人；伤害与当前武器和关卡有关。');
+        lines.push('以玩家为中心、半径 380 的圣焰每秒灼烧敌人；伤害与当前武器和关卡有关。');
         lines.push('回血不超过最大生命值；死亡或切换形态会清理羽翼和灼烧状态。');
       }
     } else if (form.id === 'korean') {
