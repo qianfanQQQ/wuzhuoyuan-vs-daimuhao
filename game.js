@@ -884,8 +884,11 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-19';
-  const BULLET_VERSION = '20261020-19';
+  const AVATAR_VERSION = '20261020-20';
+  const BULLET_VERSION = '20261020-20';
+  const koreanHorseTexture = new Image();
+  koreanHorseTexture.decoding = 'async';
+  koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -3383,11 +3386,13 @@
     addRing(x, y, 18, '#5de1ff', 0.24, 2);
   }
 
+  const KOREAN_MELEE_RADIUS = 132;
+
   function koreanMeleeAttack() {
     if (!game || !game.player || game.player.dead) return;
     const p = game.player;
     const q = p.skills.q;
-    const target = findNearestEnemy(p.x, p.y, 120);
+    const target = findNearestEnemy(p.x, p.y, KOREAN_MELEE_RADIUS);
     let arm = null;
     if (q.arms && q.arms.length) {
       if (target) {
@@ -3406,22 +3411,48 @@
       }
     }
     q.swing = 1;
-    if (!target) return;
-    p.aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
+    if (target) p.aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
     const damage = getWeaponStats(p.weapon).damage * 2;
-    damageKoreanTarget(target, damage, p.x, p.y);
-    for (let i = 0; i < 8; i += 1) {
-      const angle = p.aimAngle + rand(-0.35, 0.35);
-      spawnParticle(
-        target.x,
-        target.y,
-        Math.cos(angle) * rand(35, 160),
-        Math.sin(angle) * rand(35, 160),
-        rand(0.15, 0.35),
-        rand(2, 4),
-        Math.random() < 0.5 ? '#5de1ff' : '#ffcf66',
-        true
-      );
+    let hitCount = 0;
+
+    // 双臂横扫：攻击范围内所有敌人都结算一次，左右两侧没有视觉命中却不掉血的死角。
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead) continue;
+      if (Math.hypot(enemy.x - p.x, enemy.y - p.y) > KOREAN_MELEE_RADIUS) continue;
+      const wasDead = enemy.dead;
+      damageEnemy(enemy, damage, {
+        critical: false,
+        silent: false,
+        pushX: (enemy.x - p.x) * 0.08,
+        pushY: (enemy.y - p.y) * 0.08
+      });
+      if (!wasDead && enemy.dead) healPlayer(1, false);
+      hitCount += 1;
+      for (let k = 0; k < 6; k += 1) {
+        const angle = Math.atan2(enemy.y - p.y, enemy.x - p.x) + rand(-0.5, 0.5);
+        spawnParticle(
+          enemy.x,
+          enemy.y,
+          Math.cos(angle) * rand(40, 170),
+          Math.sin(angle) * rand(40, 170),
+          rand(0.14, 0.32),
+          rand(2, 4),
+          Math.random() < 0.5 ? '#5de1ff' : '#ffcf66',
+          true
+        );
+      }
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.dead &&
+        !game.eventBoss.defeated &&
+        Math.hypot(game.eventBoss.x - p.x, game.eventBoss.y - p.y) <= KOREAN_MELEE_RADIUS) {
+      damageEventBoss(damage, { critical: false });
+      hitCount += 1;
+    }
+
+    if (hitCount > 0) {
+      addRing(p.x, p.y, KOREAN_MELEE_RADIUS * 0.72, '#5de1ff', 0.2, 2);
+      addShake(2.5);
     }
     audio.play('shoot_pistol');
   }
@@ -8757,38 +8788,79 @@
     ctx.translate(drawX, drawY);
     ctx.scale(scale, scale);
     ctx.globalAlpha = ult.impacted ? Math.max(0, 1 - ult.hold / 0.4) : 0.95;
-    ctx.fillStyle = '#7a4a2c';
-    ctx.beginPath();
-    ctx.moveTo(-42, -8);
-    ctx.quadraticCurveTo(-38, -76, 0, -92);
-    ctx.quadraticCurveTo(38, -76, 42, -8);
-    ctx.lineTo(28, 28);
-    ctx.quadraticCurveTo(0, 42, -28, 28);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#a76b3e';
-    ctx.beginPath();
-    ctx.moveTo(-32, -26);
-    ctx.quadraticCurveTo(0, -70, 32, -26);
-    ctx.lineTo(22, 22);
-    ctx.quadraticCurveTo(0, 32, -22, 22);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#1a0f0a';
-    ctx.beginPath();
-    ctx.arc(-17, -30, 7, 0, TAU);
-    ctx.arc(17, -30, 7, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#ffcf66';
-    ctx.beginPath();
-    ctx.arc(-17, -30, 3, 0, TAU);
-    ctx.arc(17, -30, 3, 0, TAU);
-    ctx.fill();
-    ctx.fillStyle = '#4c2a1a';
-    ctx.fillRect(-24, 6, 48, 8);
-    ctx.fillStyle = '#e8d7c3';
-    ctx.fillRect(-20, 14, 8, 7);
-    ctx.fillRect(12, 14, 8, 7);
+    const traceHorseHead = function () {
+      ctx.beginPath();
+      ctx.moveTo(-42, -8);
+      ctx.quadraticCurveTo(-38, -76, 0, -92);
+      ctx.quadraticCurveTo(38, -76, 42, -8);
+      ctx.lineTo(28, 28);
+      ctx.quadraticCurveTo(0, 42, -28, 28);
+      ctx.closePath();
+    };
+    const horseReady = koreanHorseTexture.complete && koreanHorseTexture.naturalWidth > 0;
+    if (horseReady) {
+      // 新马头贴图在所有下落/落地阶段共用；按马头轮廓裁切，保持原始比例不变形。
+      ctx.save();
+      traceHorseHead();
+      ctx.clip();
+      const boxX = -42;
+      const boxY = -92;
+      const boxW = 84;
+      const boxH = 134;
+      const cover = Math.max(boxW / koreanHorseTexture.naturalWidth, boxH / koreanHorseTexture.naturalHeight);
+      const sourceW = boxW / cover;
+      const sourceH = boxH / cover;
+      const sourceX = (koreanHorseTexture.naturalWidth - sourceW) * 0.5;
+      const sourceY = (koreanHorseTexture.naturalHeight - sourceH) * 0.42;
+      ctx.drawImage(
+        koreanHorseTexture,
+        sourceX, sourceY, sourceW, sourceH,
+        boxX, boxY, boxW, boxH
+      );
+      ctx.restore();
+      traceHorseHead();
+      ctx.strokeStyle = '#2a1610';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = '#3a2015';
+      ctx.beginPath();
+      ctx.moveTo(-30, -82);
+      ctx.lineTo(-15, -108);
+      ctx.lineTo(-5, -88);
+      ctx.closePath();
+      ctx.moveTo(30, -82);
+      ctx.lineTo(15, -108);
+      ctx.lineTo(5, -88);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#7a4a2c';
+      traceHorseHead();
+      ctx.fill();
+      ctx.fillStyle = '#a76b3e';
+      ctx.beginPath();
+      ctx.moveTo(-32, -26);
+      ctx.quadraticCurveTo(0, -70, 32, -26);
+      ctx.lineTo(22, 22);
+      ctx.quadraticCurveTo(0, 32, -22, 22);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#1a0f0a';
+      ctx.beginPath();
+      ctx.arc(-17, -30, 7, 0, TAU);
+      ctx.arc(17, -30, 7, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#ffcf66';
+      ctx.beginPath();
+      ctx.arc(-17, -30, 3, 0, TAU);
+      ctx.arc(17, -30, 3, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#4c2a1a';
+      ctx.fillRect(-24, 6, 48, 8);
+      ctx.fillStyle = '#e8d7c3';
+      ctx.fillRect(-20, 14, 8, 7);
+      ctx.fillRect(12, 14, 8, 7);
+    }
     ctx.fillStyle = '#5de1ff';
     ctx.font = '900 10px "Courier New", monospace';
     ctx.textAlign = 'center';
