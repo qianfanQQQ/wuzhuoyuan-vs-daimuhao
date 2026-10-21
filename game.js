@@ -947,8 +947,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-28';
-  const BULLET_VERSION = '20261020-28';
+  const AVATAR_VERSION = '20261020-29';
+  const BULLET_VERSION = '20261020-29';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -4634,11 +4634,35 @@
     p.skills.nunSwing = 1;
   }
 
+  function blockNunEnemyBullet(bullet) {
+    if (!game || !bullet || bullet.dead) return false;
+    bullet.dead = true;
+    addRing(bullet.x, bullet.y, 12, '#ff7a3d', 0.18, 2);
+    for (let i = 0; i < 6; i += 1) {
+      const a = rand(0, TAU);
+      spawnParticle(bullet.x, bullet.y, Math.cos(a) * rand(30, 120), Math.sin(a) * rand(30, 120), rand(0.14, 0.3), rand(2, 4), Math.random() < 0.55 ? '#ffb15c' : '#ff4b2b', true);
+    }
+    return true;
+  }
+
   function resolveNunMeleeHit(angle, damage, qActive) {
     if (!game || !game.player || game.player.dead) return;
     const p = game.player;
     const range = NUN_CONFIG.fireMelee.fireRange;
     const halfArc = NUN_CONFIG.fireMelee.fireArc * 0.5;
+    // The block is tied to the exact slash hit frame, using the same arc as the sword.
+    for (let i = 0; i < game.enemyBullets.length; i += 1) {
+      const bullet = game.enemyBullets[i];
+      if (!bullet || bullet.dead) continue;
+      const d = Math.hypot(bullet.x - p.x, bullet.y - p.y);
+      if (d > range + bullet.radius) continue;
+      let diff = Math.atan2(bullet.y - p.y, bullet.x - p.x) - angle;
+      while (diff > Math.PI) diff -= TAU;
+      while (diff < -Math.PI) diff += TAU;
+      if (Math.abs(diff) <= halfArc + bullet.radius / Math.max(20, d)) {
+        blockNunEnemyBullet(bullet);
+      }
+    }
     for (let i = 0; i < game.enemies.length; i += 1) {
       const enemy = game.enemies[i];
       if (enemy.dead || enemy.charmed) continue;
@@ -5018,6 +5042,14 @@
             segmentCircleHit(backX, backY, tipX, tipY, boss.x, boss.y, boss.r + 14)) {
           sword.hitTimers[key] = NUN_CONFIG.fireR.hitInterval;
           damageEventBoss(damage, { critical: false });
+        }
+      }
+      // Block enemy bullets against the sword's actual rotating blade segment.
+      for (let j = 0; j < game.enemyBullets.length; j += 1) {
+        const bullet = game.enemyBullets[j];
+        if (!bullet || bullet.dead) continue;
+        if (segmentCircleHit(backX, backY, tipX, tipY, bullet.x, bullet.y, bullet.radius + 12)) {
+          blockNunEnemyBullet(bullet);
         }
       }
     }
