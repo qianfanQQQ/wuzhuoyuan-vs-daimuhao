@@ -183,9 +183,56 @@
       skinId: 'bride',
       name: '纯白花嫁',
       title: '花嫁形态',
-      implemented: false,
+      implemented: true,
       accent: '#ffc7dd',
-      skills: null
+      skills: {
+        q: {
+          slot: 'Q',
+          key: 'q',
+          code: 'KeyQ',
+          keyLabel: 'Q',
+          name: '心动契约',
+          icon: 'assets/skills/bride-q.svg',
+          effect: 'brideCharm',
+          cooldown: 12,
+          charmDuration: 10,
+          maxTargets: 1,
+          desc: '发射粉白爱心，命中普通敌人后魅惑 10 秒；Boss 免疫。'
+        },
+        e: {
+          slot: 'E',
+          key: 'e',
+          code: 'KeyE',
+          keyLabel: 'E',
+          name: '命定红线',
+          icon: 'assets/skills/bride-e.svg',
+          effect: 'brideLink',
+          cooldown: 14,
+          duration: 6,
+          linkRadius: 190,
+          maxLinks: 4,
+          shareRatio: 0.35,
+          desc: '命中普通敌人后留下吻痕，并连接附近敌人形成红线网络，分担部分伤害。'
+        },
+        r: {
+          slot: 'R',
+          key: 'r',
+          code: 'Space',
+          keyLabel: '空格',
+          name: '白翼圣临',
+          icon: 'assets/skills/bride-r.svg',
+          effect: 'brideWings',
+          cooldown: 50,
+          duration: 20,
+          healInterval: 5,
+          healAmount: 5,
+          burnInterval: 1,
+          burnRadius: 190,
+          burnWeaponScale: 0.5,
+          burnStageDamage: 10,
+          desc: '展开白翼并持续灼烧周围敌人 20 秒；每 5 秒恢复 5 HP，最多四次。'
+        }
+      }
     },
     {
       id: 'nun',

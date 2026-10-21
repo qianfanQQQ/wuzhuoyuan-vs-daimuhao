@@ -21,6 +21,38 @@
     snow: { soft: 'rgba(191,233,255,0.22)', strong: 'rgba(191,233,255,0.7)' },
     grass: { soft: 'rgba(184,233,134,0.2)', strong: 'rgba(184,233,134,0.62)' }
   };
+  const BRIDE_FORM_DEF = window.CharacterForms ? window.CharacterForms.getById('bride') : null;
+  const BRIDE_SKILL_DEFS = BRIDE_FORM_DEF && BRIDE_FORM_DEF.skills ? BRIDE_FORM_DEF.skills : {};
+  const BRIDE_CONFIG = {
+    q: Object.assign({
+      projectileSpeed: 540,
+      projectileLife: 1.6,
+      projectileRadius: 12,
+      cooldown: 12,
+      charmDuration: 10
+    }, BRIDE_SKILL_DEFS.q || {}),
+    e: Object.assign({
+      projectileSpeed: 560,
+      projectileLife: 1.8,
+      projectileRadius: 11,
+      cooldown: 14,
+      linkRadius: 190,
+      maxLinks: 4,
+      duration: 6,
+      shareRatio: 0.35
+    }, BRIDE_SKILL_DEFS.e || {}),
+    r: Object.assign({
+      cooldown: 50,
+      duration: 20,
+      healInterval: 5,
+      healAmount: 5,
+      burnInterval: 1,
+      burnRadius: 190,
+      burnWeaponScale: 0.5,
+      burnStageDamage: 10
+    }, BRIDE_SKILL_DEFS.r || {})
+  };
+
   const STAGE_BOSS_STAGES = [5, 10, 15, 20];
   const STAGE_BOSS_CONFIG = {
     5: { tier: 1, hp: 4200, damageMult: 1, cooldownMult: 1, countBonus: 0, speedMult: 1 },
@@ -884,8 +916,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-22';
-  const BULLET_VERSION = '20261020-22';
+  const AVATAR_VERSION = '20261020-23';
+  const BULLET_VERSION = '20261020-23';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1231,7 +1263,11 @@
         charges: 0,
         killProgress: 0,
         ult: null,
-        castLock: 0
+        castLock: 0,
+        active: 0,
+        healTimer: 0,
+        healTicks: 0,
+        burnTimer: 0
       }
     };
   }
@@ -1244,6 +1280,11 @@
   function isKoreanForm() {
     return !!game && game.player && game.player.formId === 'korean' &&
       !!window.CharacterForms && CharacterForms.hasSkills('korean');
+  }
+
+  function isBrideForm() {
+    return !!game && game.player && game.player.formId === 'bride' &&
+      !!window.CharacterForms && CharacterForms.hasSkills('bride');
   }
 
   function isChampionForm() {
@@ -2822,6 +2863,9 @@
       companionRecruitedThisRun: false,
       skillProjectiles: [],
       koreanZombie: null,
+      brideProjectiles: [],
+      brideLink: null,
+      brideCharmedUid: null,
       eventBoss: null,
       eventBossActive: false,
       eventBossDefeated: false,
@@ -2966,7 +3010,20 @@
   function skillIntroDetails(form, slot, def) {
     const lines = [];
     if (!form || !def) return lines;
-    if (form.id === 'korean') {
+    if (form.id === 'bride') {
+      if (slot === 'q') {
+        lines.push('粉白爱心命中普通敌人后魅惑 10 秒；Boss 免疫魅惑。');
+        lines.push('同一时间最多控制 1 名敌人；魅惑敌人会攻击其他敌人，10 秒后自动死亡。');
+      } else if (slot === 'e') {
+        lines.push('命中普通敌人后留下玫瑰红吻痕，连接半径 190 内最多 4 名敌人。');
+        lines.push('连接持续 6 秒；目标受到伤害的 35% 由其他连接目标分担。');
+        lines.push('目标死亡后自动清理并尝试转移连接，Boss 可以参与分摊但不会被魅惑。');
+      } else if (slot === 'r') {
+        lines.push('持续 20 秒，冷却 50 秒；每 5 秒恢复 5 HP，最多恢复 20 HP。');
+        lines.push('以玩家为中心、半径 190 的圣焰每秒灼烧敌人；伤害与当前武器和关卡有关。');
+        lines.push('回血不超过最大生命值；死亡或切换形态会清理羽翼和灼烧状态。');
+      }
+    } else if (form.id === 'korean') {
       if (slot === 'q') {
         lines.push('AOE 半径 ' + (def.aoeRadius || 132) + '，每次挥拳命中范围内全部敌人。');
         lines.push('伤害 = 当前装备武器最终实际攻击力 × ' + (def.damageMultiplier || 2) + '（含升级、被动加成）。');
@@ -3148,7 +3205,7 @@
     let bestDistSq = maxDistance * maxDistance;
     for (let i = 0; i < game.enemies.length; i += 1) {
       const enemy = game.enemies[i];
-      if (enemy.dead) continue;
+      if (enemy.dead || enemy.charmed) continue;
       const d2 = distSq(x, y, enemy.x, enemy.y);
       if (d2 < bestDistSq) {
         bestDistSq = d2;
@@ -3257,6 +3314,28 @@
     }
   }
 
+  function clearBrideWorldState() {
+    if (!game) return;
+    game.brideProjectiles = [];
+    game.brideLink = null;
+    game.brideCharmedUid = null;
+    if (game.enemies) {
+      game.enemies.forEach(function (enemy) {
+        enemy.charmed = false;
+        enemy.charmTimer = 0;
+        enemy.charmTarget = null;
+        enemy.brideKiss = false;
+      });
+    }
+    if (game.player && game.player.skills) {
+      game.player.skills.e.active = 0;
+      game.player.skills.r.active = 0;
+      game.player.skills.r.healTimer = 0;
+      game.player.skills.r.healTicks = 0;
+      game.player.skills.r.burnTimer = 0;
+    }
+  }
+
   function syncPlayerForm() {
     if (!game || !game.player) return;
     const nextFormId = getCurrentFormId();
@@ -3264,6 +3343,7 @@
     if (p.formId === nextFormId) return;
     clearChampionWorldState();
     clearKoreanWorldState();
+    clearBrideWorldState();
     p.formId = nextFormId;
     p.skills = createSkillState(nextFormId, game.kills);
     // 切换形态时旧的技能效果必须立即失效，射速回到新形态的当前实际值。
@@ -3274,6 +3354,7 @@
     if (!game || !game.player || !game.player.skills) return;
     clearChampionWorldState();
     clearKoreanWorldState();
+    clearBrideWorldState();
     const skills = game.player.skills;
     skills.q.active = 0;
     skills.e.active = 0;
@@ -3350,6 +3431,7 @@
     }
 
     if (isKoreanForm()) updateKoreanSkills(dt);
+    if (isBrideForm()) updateBrideSkills(dt);
   }
 
   function castSkill(slot) {
@@ -3369,6 +3451,10 @@
 
     if (form.id === 'korean') {
       return castKoreanSkill(slot, form, def);
+    }
+
+    if (form.id === 'bride') {
+      return castBrideSkill(slot, form, def);
     }
 
     if (slot === 'q') {
@@ -3843,6 +3929,395 @@
       } else {
         r.ult.hold += dt;
         if (r.ult.hold >= 0.4) r.ult = null;
+      }
+    }
+  }
+
+  function findBrideCharmTarget(source) {
+    if (!game) return null;
+    let best = null;
+    let bestDist = Infinity;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy === source || enemy.dead || enemy.charmed) continue;
+      const d = Math.hypot(enemy.x - source.x, enemy.y - source.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = enemy;
+      }
+    }
+    return best;
+  }
+
+  function charmBrideEnemy(enemy) {
+    if (!game || !enemy || enemy.dead || enemy.type === 'boss' || enemy.charmed) return false;
+    const current = game.enemies.find(function (item) {
+      return item.uid === game.brideCharmedUid && !item.dead && item.charmed;
+    });
+    if (current && current !== enemy) {
+      addToast('心动契约只能控制一名敌人', 'warn', 1.1);
+      return false;
+    }
+    if (current === enemy) {
+      enemy.charmTimer = BRIDE_CONFIG.q.charmDuration;
+      return true;
+    }
+    game.brideCharmedUid = enemy.uid;
+    enemy.charmed = true;
+    enemy.charmTimer = BRIDE_CONFIG.q.charmDuration;
+    enemy.charmTarget = null;
+    enemy.attackCd = 0.2;
+    enemy.ring = '#ff9fc7';
+    enemy.spawnT = 0;
+    addRing(enemy.x, enemy.y, enemy.r + 16, '#ffc7dd', 0.5, 3);
+    addRing(enemy.x, enemy.y, enemy.r + 28, '#ff6f9e', 0.35, 2);
+    addToast('心动契约 · 敌人被魅惑 10 秒', 'good', 1.6);
+    audio.play('skill');
+    for (let i = 0; i < 16; i += 1) {
+      const a = rand(0, TAU);
+      spawnParticle(enemy.x, enemy.y, Math.cos(a) * rand(30, 130), Math.sin(a) * rand(30, 130), rand(0.3, 0.7), rand(2, 5), Math.random() < 0.5 ? '#ffc7dd' : '#ff6f9e', true);
+    }
+    return true;
+  }
+
+  function spawnBrideBolt(enemy, target) {
+    if (!game || !enemy || !target) return;
+    const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    game.brideProjectiles.push({
+      kind: 'charmBolt',
+      x: enemy.x, y: enemy.y,
+      vx: Math.cos(angle) * 480, vy: Math.sin(angle) * 480,
+      life: 1.2, radius: 6, damage: Math.max(1, enemy.damage),
+      trail: [{ x: enemy.x, y: enemy.y }],
+      dead: false
+    });
+  }
+
+  function updateCharmedEnemy(enemy, dt) {
+    enemy.charmTimer -= dt;
+    if (enemy.charmTimer <= 0) {
+      game.brideCharmedUid = null;
+      enemy.charmed = false;
+      enemy.brideKiss = false;
+      addRing(enemy.x, enemy.y, enemy.r + 18, '#ffc7dd', 0.55, 3);
+      addToast('心动契约结束 · 魅惑敌人消散', 'info', 1.4);
+      killEnemy(enemy);
+      return;
+    }
+    let target = findBrideCharmTarget(enemy);
+    if (!target) return;
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    enemy.charmTarget = target;
+    if (enemy.ranged) {
+      if (dist > 260) {
+        enemy.x += (dx / dist) * enemy.speed * 0.8 * dt;
+        enemy.y += (dy / dist) * enemy.speed * 0.8 * dt;
+      }
+      if (enemy.attackCd <= 0 && dist <= 470) {
+        enemy.attackCd = 1.3;
+        spawnBrideBolt(enemy, target);
+        enemy.attackFlash = 0.2;
+      }
+    } else {
+      if (dist > enemy.r + target.r + 5) {
+        enemy.x += (dx / dist) * enemy.speed * dt;
+        enemy.y += (dy / dist) * enemy.speed * dt;
+      } else if (enemy.attackCd <= 0) {
+        enemy.attackCd = 0.95;
+        damageEnemy(target, Math.max(1, enemy.damage * 1.1), {
+          critical: false,
+          silent: false,
+          pushX: (dx / dist) * 24,
+          pushY: (dy / dist) * 24
+        });
+        enemy.attackFlash = 0.2;
+        addRing(enemy.x, enemy.y, enemy.r + 9, '#ff9fc7', 0.25, 2);
+      }
+    }
+    clampToMap(enemy);
+  }
+
+  function spawnBrideProjectile(kind) {
+    if (!game) return;
+    const p = game.player;
+    const config = kind === 'brideMark' ? BRIDE_CONFIG.e : BRIDE_CONFIG.q;
+    const angle = p.aimAngle;
+    game.brideProjectiles.push({
+      kind: kind,
+      x: p.x + Math.cos(angle) * (p.r + 18),
+      y: p.y + Math.sin(angle) * (p.r + 18),
+      vx: Math.cos(angle) * config.projectileSpeed,
+      vy: Math.sin(angle) * config.projectileSpeed,
+      life: config.projectileLife,
+      radius: config.projectileRadius,
+      trail: [{ x: p.x, y: p.y }],
+      dead: false
+    });
+  }
+
+  function createBrideLink(source) {
+    if (!game || !source || source.dead) return;
+    if (game.brideLink) endBrideLink(false);
+    const targets = [source];
+    source.brideKiss = true;
+    const candidates = game.enemies.filter(function (enemy) {
+      return enemy !== source && !enemy.dead && !enemy.charmed;
+    }).sort(function (a, b) {
+      return Math.hypot(a.x - source.x, a.y - source.y) - Math.hypot(b.x - source.x, b.y - source.y);
+    });
+    for (let i = 0; i < candidates.length && targets.length < BRIDE_CONFIG.e.maxLinks; i += 1) {
+      const enemy = candidates[i];
+      if (Math.hypot(enemy.x - source.x, enemy.y - source.y) <= BRIDE_CONFIG.e.linkRadius) {
+        enemy.brideKiss = true;
+        targets.push(enemy);
+      }
+    }
+    game.brideLink = {
+      targets: targets,
+      time: BRIDE_CONFIG.e.duration,
+      duration: BRIDE_CONFIG.e.duration
+    };
+    game.player.skills.e.active = BRIDE_CONFIG.e.duration;
+    addRing(source.x, source.y, BRIDE_CONFIG.e.linkRadius * 0.45, '#ff6f9e', 0.5, 3);
+    addToast('命定红线 · 连接 ' + targets.length + ' 名敌人', 'good', 1.5);
+    audio.play('skill');
+    refreshSkillBar(true);
+  }
+
+  function endBrideLink(playEffect) {
+    if (!game || !game.brideLink) return;
+    const targets = game.brideLink.targets.slice();
+    targets.forEach(function (enemy) {
+      if (!enemy) return;
+      enemy.brideKiss = false;
+      if (playEffect) {
+        for (let i = 0; i < 6; i += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(enemy.x, enemy.y, Math.cos(a) * rand(30, 130), Math.sin(a) * rand(30, 130), rand(0.3, 0.7), rand(2, 5), Math.random() < 0.5 ? '#fff5fa' : '#ffc7dd', true);
+        }
+      }
+    });
+    game.brideLink = null;
+    if (game.player && game.player.skills) game.player.skills.e.active = 0;
+    if (playEffect) {
+      addRing(targets.length ? targets[0].x : game.player.x, targets.length ? targets[0].y : game.player.y, 60, '#ffffff', 0.35, 2);
+      addToast('红线绷断 · 花瓣散落', 'info', 1.2);
+    }
+    refreshSkillBar(true);
+  }
+
+  function updateBrideLink(dt) {
+    if (!game || !game.brideLink) return;
+    const link = game.brideLink;
+    link.time -= dt;
+    link.targets = link.targets.filter(function (enemy) {
+      return enemy && !enemy.dead && !enemy.charmed;
+    });
+    link.targets.forEach(function (enemy) { enemy.brideKiss = true; });
+
+    if (link.time > 0 && link.targets.length < BRIDE_CONFIG.e.maxLinks) {
+      const candidates = game.enemies.filter(function (enemy) {
+        return !enemy.dead && !enemy.charmed && link.targets.indexOf(enemy) === -1;
+      });
+      let best = null;
+      let bestDist = BRIDE_CONFIG.e.linkRadius;
+      for (let i = 0; i < link.targets.length; i += 1) {
+        const anchor = link.targets[i];
+        for (let j = 0; j < candidates.length; j += 1) {
+          const d = Math.hypot(candidates[j].x - anchor.x, candidates[j].y - anchor.y);
+          if (d < bestDist) {
+            bestDist = d;
+            best = candidates[j];
+          }
+        }
+      }
+      if (best) {
+        best.brideKiss = true;
+        link.targets.push(best);
+        addRing(best.x, best.y, best.r + 10, '#ffc7dd', 0.35, 2);
+      }
+    }
+
+    if (link.time <= 0 || link.targets.length < 2) {
+      endBrideLink(true);
+      return;
+    }
+    if (game.player.skills) game.player.skills.e.active = link.time;
+    refreshSkillBar(false);
+  }
+
+  function updateBrideProjectiles(dt) {
+    if (!game || game.brideProjectiles.length === 0) return;
+    for (let i = 0; i < game.brideProjectiles.length; i += 1) {
+      const projectile = game.brideProjectiles[i];
+      if (projectile.dead) continue;
+      projectile.life -= dt;
+      const oldX = projectile.x;
+      const oldY = projectile.y;
+      const nextX = projectile.x + projectile.vx * dt;
+      const nextY = projectile.y + projectile.vy * dt;
+      projectile.trail.push({ x: nextX, y: nextY });
+      if (projectile.trail.length > 8) projectile.trail.shift();
+      projectile.x = nextX;
+      projectile.y = nextY;
+      if (projectile.life <= 0 || nextX < 0 || nextX > MAP.w || nextY < 0 || nextY > MAP.h) {
+        projectile.dead = true;
+        continue;
+      }
+
+      let hit = null;
+      if (projectile.kind === 'charmBolt') {
+        for (let j = 0; j < game.enemies.length; j += 1) {
+          const enemy = game.enemies[j];
+          if (enemy.dead || enemy.charmed) continue;
+          if (segmentCircleHit(oldX, oldY, nextX, nextY, enemy.x, enemy.y, enemy.r + projectile.radius)) {
+            hit = enemy;
+            break;
+          }
+        }
+        if (hit) {
+          projectile.dead = true;
+          damageEnemy(hit, projectile.damage, { critical: false, silent: false });
+        }
+        continue;
+      }
+
+      for (let j = 0; j < game.enemies.length; j += 1) {
+        const enemy = game.enemies[j];
+        if (enemy.dead || enemy.charmed) continue;
+        if (projectile.kind === 'brideMark' && enemy.type === 'boss') continue;
+        if (segmentCircleHit(oldX, oldY, nextX, nextY, enemy.x, enemy.y, enemy.r + projectile.radius)) {
+          hit = enemy;
+          break;
+        }
+      }
+
+      if (hit) {
+        projectile.dead = true;
+        if (projectile.kind === 'brideHeart') {
+          if (hit.type === 'boss') {
+            addToast('Boss 免疫心动契约', 'warn', 1.2);
+            audio.play('denied');
+          } else {
+            charmBrideEnemy(hit);
+          }
+        } else if (projectile.kind === 'brideMark') {
+          createBrideLink(hit);
+        }
+      }
+    }
+    game.brideProjectiles = game.brideProjectiles.filter(function (projectile) {
+      return !projectile.dead;
+    });
+  }
+
+  function brideBurnDamage() {
+    if (!game || !game.player) return;
+    const p = game.player;
+    const stats = getWeaponStats(p.weapon);
+    const damage = Math.max(1, Math.round(stats.damage * BRIDE_CONFIG.r.burnWeaponScale + (game.stage || 1) * BRIDE_CONFIG.r.burnStageDamage));
+    const radius = BRIDE_CONFIG.r.burnRadius;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead || enemy.charmed) continue;
+      if (Math.hypot(enemy.x - p.x, enemy.y - p.y) <= radius) {
+        damageEnemy(enemy, damage, { critical: false, silent: true });
+      }
+    }
+    if (game.boss && !game.boss.dead &&
+        Math.hypot(game.boss.x - p.x, game.boss.y - p.y) <= radius + game.boss.r) {
+      damageEnemy(game.boss, damage, { critical: false, silent: true });
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated &&
+        Math.hypot(game.eventBoss.x - p.x, game.eventBoss.y - p.y) <= radius + game.eventBoss.r) {
+      damageEventBoss(damage, { critical: false });
+    }
+  }
+
+  function castBrideSkill(slot, form, def) {
+    if (!game || !game.player || game.player.dead) return false;
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return false;
+
+    if (slot === 'q') {
+      if (skills.q.cooldown > 0) return false;
+      skills.q.cooldown = BRIDE_CONFIG.q.cooldown;
+      spawnBrideProjectile('brideHeart');
+      addToast('Q · 心动契约', 'good', 1.2);
+      pulseSkillSlot('q');
+      refreshSkillBar(true);
+      return true;
+    }
+
+    if (slot === 'e') {
+      if (skills.e.active > 0 || skills.e.cooldown > 0) return false;
+      skills.e.cooldown = BRIDE_CONFIG.e.cooldown;
+      spawnBrideProjectile('brideMark');
+      addToast('E · 命定红线', 'good', 1.2);
+      pulseSkillSlot('e');
+      refreshSkillBar(true);
+      return true;
+    }
+
+    if (slot === 'r') {
+      if (skills.r.active > 0 || skills.r.cooldown > 0) return false;
+      skills.r.active = BRIDE_CONFIG.r.duration;
+      skills.r.cooldown = BRIDE_CONFIG.r.cooldown;
+      skills.r.healTimer = BRIDE_CONFIG.r.healInterval;
+      skills.r.healTicks = 0;
+      skills.r.burnTimer = 0;
+      addRing(p.x, p.y, BRIDE_CONFIG.r.burnRadius, '#fff5fa', 0.8, 4);
+      addToast('R · 白翼圣临', 'good', 1.5);
+      audio.play('skill');
+      pulseSkillSlot('r');
+      refreshSkillBar(true);
+      return true;
+    }
+    return false;
+  }
+
+  function updateBrideSkills(dt) {
+    if (!game || !game.player) return;
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return;
+    const r = skills.r;
+    r.cooldown = Math.max(0, r.cooldown - dt);
+
+    if (game.brideLink) updateBrideLink(dt);
+
+    if (r.active > 0) {
+      r.burnTimer -= dt;
+      if (r.burnTimer <= 0) {
+        r.burnTimer += BRIDE_CONFIG.r.burnInterval;
+        brideBurnDamage();
+        addRing(p.x, p.y, BRIDE_CONFIG.r.burnRadius, 'rgba(255,245,250,0.32)', 0.35, 2);
+        for (let i = 0; i < 5; i += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(p.x + Math.cos(a) * rand(50, BRIDE_CONFIG.r.burnRadius), p.y + Math.sin(a) * rand(50, BRIDE_CONFIG.r.burnRadius), rand(-20, 20), rand(-60, -10), rand(0.3, 0.8), rand(2, 5), Math.random() < 0.5 ? '#fff5fa' : '#ffcf66', true);
+        }
+      }
+      r.healTimer -= dt;
+      if (r.healTimer <= 0 && r.healTicks < 4) {
+        healPlayer(BRIDE_CONFIG.r.healAmount, false);
+        r.healTicks += 1;
+        r.healTimer += BRIDE_CONFIG.r.healInterval;
+      }
+      r.active -= dt;
+      if (r.active <= 0) {
+        r.active = 0;
+        r.healTimer = 0;
+        r.burnTimer = 0;
+        addRing(p.x, p.y, BRIDE_CONFIG.r.burnRadius * 0.8, '#ffc7dd', 0.6, 3);
+        addToast('白翼收拢 · 圣焰消散', 'info', 1.4);
+        for (let i = 0; i < 20; i += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(p.x, p.y, Math.cos(a) * rand(60, 240), Math.sin(a) * rand(60, 240), rand(0.4, 1.0), rand(2, 6), Math.random() < 0.6 ? '#fff5fa' : '#ffc7dd', true);
+        }
+        refreshSkillBar(true);
       }
     }
   }
@@ -4907,6 +5382,11 @@
         continue;
       }
 
+      if (enemy.charmed) {
+        updateCharmedEnemy(enemy, dt);
+        continue;
+      }
+
       if (enemy.type === 'boss') {
         updateBoss(enemy, dt);
       } else {
@@ -5918,10 +6398,43 @@
     }
   }
 
+  function isBrideLinked(enemy) {
+    if (!game || !game.brideLink || game.brideLink.time <= 0) return false;
+    return game.brideLink.targets.indexOf(enemy) !== -1;
+  }
+
+  function applyBrideDamageShare(enemy, amount, opts) {
+    if (!isBrideLinked(enemy)) return 0;
+    const targets = game.brideLink.targets.filter(function (target) {
+      return target && !target.dead && target !== enemy && !target.charmed;
+    });
+    if (targets.length === 0) return 0;
+    const share = amount * BRIDE_CONFIG.e.shareRatio;
+    const each = share / targets.length;
+    if (each <= 0) return 0;
+    for (let i = 0; i < targets.length; i += 1) {
+      damageEnemy(targets[i], each, {
+        critical: false,
+        silent: true,
+        shared: true,
+        noShare: true,
+        pushX: 0,
+        pushY: 0,
+        allowCharmed: false
+      });
+    }
+    return share;
+  }
+
   function damageEnemy(enemy, amount, options) {
     if (!game || !enemy || enemy.dead) return;
     const opts = options || {};
-    const damage = Math.max(0.1, amount);
+    if (enemy.charmed && !opts.allowCharmed) return;
+    let damage = Math.max(0.1, amount);
+    if (!opts.shared && !opts.noShare) {
+      const shared = applyBrideDamageShare(enemy, damage, opts);
+      damage = Math.max(0.1, damage - shared);
+    }
     enemy.hp -= damage;
     enemy.hitFlash = 0.13;
 
@@ -7110,6 +7623,7 @@
       updateEnemies(dt);
     }
     if (state === S.PLAYING) updateSkillProjectiles(dt);
+    if (state === S.PLAYING) updateBrideProjectiles(dt);
     if (state === S.PLAYING) updatePlayerBullets(dt);
     if (state === S.PLAYING && !frozen) updateEnemyBullets(dt);
     if (state === S.PLAYING) updateCompanionBullets(dt);
@@ -7433,10 +7947,13 @@
     drawChargerTelegraphs();
     drawBossTelegraphs();
     drawRewindEcho();
+    drawBrideAura();
+    drawBrideLinks();
     drawCharacters(now);
     drawKoreanZombie();
     drawBullets();
     drawSkillProjectiles();
+    drawBrideProjectiles();
     drawCompanionBullets();
     drawParticles();
     drawDamageNumbers();
@@ -8145,7 +8662,7 @@
           barWidth,
           4.5,
           hpRatio,
-          '#ff4f6d',
+          enemy.charmed ? '#ff9fc7' : '#ff4f6d',
           '#ffad54',
           'rgba(0,0,0,0.5)'
         );
@@ -8174,8 +8691,32 @@
         ctx.fillText(enemy.chargeState === 'warning' ? '⚠ 冲撞' : '冲撞精英', enemy.x, enemy.y - radius - 19);
         ctx.globalAlpha = 1;
       }
+      if (enemy.charmed) {
+        const t = performance.now() * 0.001;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(255,159,199,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, radius + 9 + Math.sin(t * 5) * 2, 0, TAU);
+        ctx.stroke();
+        ctx.fillStyle = '#ffc7dd';
+        for (let i = 0; i < 3; i += 1) {
+          const a = t * 1.6 + i * TAU / 3;
+          traceBrideHeart(enemy.x + Math.cos(a) * (radius + 18), enemy.y + Math.sin(a) * (radius + 18) - 5, 4);
+          ctx.fill();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 0.95;
+        setMonoFont(7.5, 800);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffc7dd';
+        ctx.fillText('♥ 魅惑 ' + Math.max(0, enemy.charmTimer).toFixed(1) + 's', enemy.x, enemy.y - radius - 34);
+        ctx.globalAlpha = 1;
+      }
     }
 
+    drawBrideKissMark(enemy);
     ctx.restore();
   }
 
@@ -8601,6 +9142,7 @@
       ctx.restore();
     }
 
+    drawBrideWings(now);
     const koreanMelee = isKoreanForm() && isKoreanMeleeActive();
     if (!koreanMelee) drawPlayerWeapon(p, renderY);
     if (koreanMelee) drawKoreanArms(now);
@@ -8984,6 +9526,165 @@
       ctx.fillRect(game.camera.x, game.camera.y, view.w, view.h);
       ctx.restore();
     }
+  }
+
+  function traceBrideHeart(x, y, size) {
+    ctx.beginPath();
+    ctx.moveTo(x, y + size * 0.75);
+    ctx.bezierCurveTo(x - size * 1.2, y - size * 0.2, x - size * 0.55, y - size, x, y - size * 0.35);
+    ctx.bezierCurveTo(x + size * 0.55, y - size, x + size * 1.2, y - size * 0.2, x, y + size * 0.75);
+    ctx.closePath();
+  }
+
+  function drawBrideAura() {
+    if (!game || !game.player || !isBrideForm()) return;
+    const p = game.player;
+    const r = p.skills.r;
+    if (!r || r.active <= 0) return;
+    const radius = BRIDE_CONFIG.r.burnRadius;
+    const time = performance.now() * 0.001;
+    ctx.save();
+    const glow = ctx.createRadialGradient(p.x, p.y, p.r, p.x, p.y, radius);
+    glow.addColorStop(0, 'rgba(255,247,252,0.08)');
+    glow.addColorStop(0.55, 'rgba(255,214,231,0.1)');
+    glow.addColorStop(1, 'rgba(255,207,102,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,245,250,' + (0.36 + Math.sin(time * 3) * 0.1) + ')';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 12]);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (let i = 0; i < 10; i += 1) {
+      const a = time * 0.35 + (i / 10) * TAU;
+      const rr = radius * (0.45 + (i % 3) * 0.16);
+      ctx.fillStyle = i % 2 ? 'rgba(255,245,250,0.5)' : 'rgba(255,207,102,0.35)';
+      traceBrideHeart(p.x + Math.cos(a) * rr, p.y + Math.sin(a) * rr, 3 + (i % 2));
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawBrideLinks() {
+    if (!game || !game.brideLink) return;
+    const link = game.brideLink;
+    const time = performance.now() * 0.001;
+    const targets = link.targets;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < targets.length; i += 1) {
+      for (let j = i + 1; j < targets.length; j += 1) {
+        const a = targets[i];
+        const b = targets[j];
+        if (!a || !b || a.dead || b.dead) continue;
+        ctx.strokeStyle = 'rgba(255,105,158,' + (0.4 + Math.sin(time * 5 + i + j) * 0.15) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        const mx = (a.x + b.x) * 0.5 + Math.sin(time * 2 + j) * 12;
+        const my = (a.y + b.y) * 0.5 + Math.cos(time * 2 + i) * 12;
+        ctx.quadraticCurveTo(mx, my, b.x, b.y);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawBrideProjectiles() {
+    if (!game || !game.brideProjectiles) return;
+    const time = performance.now() * 0.001;
+    for (let i = 0; i < game.brideProjectiles.length; i += 1) {
+      const projectile = game.brideProjectiles[i];
+      if (projectile.dead) continue;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = projectile.kind === 'brideMark' ? 'rgba(255,111,158,0.35)' : 'rgba(255,199,221,0.35)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (projectile.trail.length) {
+        ctx.moveTo(projectile.trail[0].x, projectile.trail[0].y);
+        for (let j = 1; j < projectile.trail.length; j += 1) ctx.lineTo(projectile.trail[j].x, projectile.trail[j].y);
+      }
+      ctx.stroke();
+      ctx.restore();
+      if (projectile.kind === 'brideMark') {
+        ctx.save();
+        ctx.translate(projectile.x, projectile.y);
+        ctx.rotate(time * 4);
+        ctx.fillStyle = '#ff6f9e';
+        ctx.beginPath();
+        ctx.ellipse(-4, 0, 7, 3, -0.35, 0, TAU);
+        ctx.ellipse(4, 0, 7, 3, 0.35, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#fff5fa';
+        ctx.fillRect(-2, -2, 4, 4);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.fillStyle = projectile.kind === 'charmBolt' ? '#ff9fc7' : '#ffc7dd';
+        traceBrideHeart(projectile.x, projectile.y, projectile.kind === 'charmBolt' ? 5 : 8);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  function drawBrideWings(now) {
+    if (!game || !game.player || !isBrideForm()) return;
+    const p = game.player;
+    const r = p.skills.r;
+    if (!r || r.active <= 0 || p.dead) return;
+    const time = now * 0.001;
+    const flap = Math.sin(time * 2.2) * 8;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let side = -1; side <= 1; side += 2) {
+      for (let f = 0; f < 3; f += 1) {
+        const baseX = p.x + side * (p.r + 2);
+        const baseY = p.y - 2 + f * 5;
+        ctx.fillStyle = f === 0 ? 'rgba(255,255,255,0.82)' : f === 1 ? 'rgba(255,245,250,0.66)' : 'rgba(255,214,231,0.5)';
+        ctx.strokeStyle = 'rgba(255,207,102,0.28)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.bezierCurveTo(
+          baseX + side * (45 + f * 10), baseY - 60 - flap,
+          baseX + side * (95 + f * 8), baseY - 30 - flap,
+          baseX + side * (72 + f * 6), baseY + 18 + f * 9
+        );
+        ctx.bezierCurveTo(
+          baseX + side * (42 + f * 4), baseY + 8 + f * 6,
+          baseX + side * 16, baseY + 2,
+          baseX, baseY
+        );
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawBrideKissMark(enemy) {
+    if (!enemy || !enemy.brideKiss) return;
+    const t = performance.now() * 0.001;
+    ctx.save();
+    ctx.translate(enemy.x + enemy.r * 0.48, enemy.y - enemy.r * 0.42);
+    ctx.rotate(-0.3 + Math.sin(t * 2) * 0.08);
+    ctx.fillStyle = '#d92f61';
+    ctx.beginPath();
+    ctx.ellipse(-4, 0, 6, 3, -0.35, 0, TAU);
+    ctx.ellipse(4, 0, 6, 3, 0.35, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#ff9fc7';
+    ctx.beginPath();
+    ctx.arc(0, -2, 2, 0, TAU);
+    ctx.fill();
+    ctx.restore();
   }
 
   function drawPlayerWeapon(p, renderY) {
@@ -10387,6 +11088,27 @@
           mask.style.height = '0%';
           timer.textContent = '';
           button.title = '十六强重开 · 就绪';
+        }
+        return;
+      }
+
+      if (form.id === 'bride') {
+        const br = stateForSlot;
+        if (br.active > 0) {
+          button.classList.add('is-active');
+          mask.style.height = '0%';
+          timer.textContent = br.active.toFixed(1) + 's';
+          button.title = '白翼圣临 · 剩余 ' + br.active.toFixed(1) + 's';
+        } else if (br.cooldown > 0) {
+          button.classList.add('is-r-charging');
+          mask.style.height = ((clamp(br.cooldown / def.cooldown, 0, 1)) * 100).toFixed(1) + '%';
+          timer.textContent = String(Math.ceil(br.cooldown));
+          button.title = '白翼圣临 · 冷却 ' + Math.ceil(br.cooldown) + 's';
+        } else {
+          button.classList.add('is-r-ready');
+          mask.style.height = '0%';
+          timer.textContent = '';
+          button.title = '白翼圣临 · 就绪';
         }
         return;
       }
