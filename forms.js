@@ -262,6 +262,8 @@
           swordOrbit: 76,
           swordRange: 380,
           attackInterval: 0.7,
+          flightSpeed: 620,
+          returnSpeed: 780,
           weaponScale: 1,
           stageDamage: 5,
           desc: '召唤三把独立紫色魔剑环绕自身，自行索敌并攻击附近敌人。'
@@ -345,6 +347,8 @@
           swordOrbit: 112,
           stageDamage: 60,
           hitInterval: 0.45,
+          swordReach: 160,
+          swordBack: 30,
           desc: '召唤三把巨型火焰魔剑环绕自身旋转 10 秒，每次命中造成 60×关卡 伤害。'
         }
       }

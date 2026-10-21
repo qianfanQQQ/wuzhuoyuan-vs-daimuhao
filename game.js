@@ -57,7 +57,8 @@
   const NUN_CONFIG = {
     q: Object.assign({
       cooldown: 10, duration: 6, swordCount: 3, swordOrbit: 76,
-      swordRange: 380, attackInterval: 0.7, weaponScale: 1, stageDamage: 5
+      swordRange: 380, attackInterval: 0.7, weaponScale: 1, stageDamage: 5,
+      flightSpeed: 620, returnSpeed: 780
     }, NUN_DEMON_DEFS.q || {}),
     e: Object.assign({
       cooldown: 14, duration: 8, attackRange: 230, attackInterval: 1.25,
@@ -76,7 +77,7 @@
     }, NUN_FIRE_DEFS.e || {}),
     fireR: Object.assign({
       cooldown: 50, duration: 10, swordCount: 3, swordOrbit: 112,
-      stageDamage: 60, hitInterval: 0.45
+      stageDamage: 60, hitInterval: 0.45, swordReach: 160, swordBack: 30
     }, NUN_FIRE_DEFS.r || {}),
     fireMelee: Object.assign({
       fireRange: 132, fireArc: 1.65, fireDamageMult: 1
@@ -946,14 +947,36 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-27';
-  const BULLET_VERSION = '20261020-27';
+  const AVATAR_VERSION = '20261020-28';
+  const BULLET_VERSION = '20261020-28';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
   const brideWingsTexture = new Image();
   brideWingsTexture.decoding = 'async';
   brideWingsTexture.src = 'assets/effects/bride-wings.png?v=' + AVATAR_VERSION;
+
+  const nunTextures = {};
+  [
+    ['demonSword', 'nun-demon-sword.png'],
+    ['tentacle', 'nun-tentacle.png'],
+    ['tentacleImpact', 'nun-tentacle-impact.png'],
+    ['demonBullet', 'nun-demon-bullet.png'],
+    ['fireSword', 'nun-fire-sword.png'],
+    ['fireSlash', 'nun-fire-slash.png'],
+    ['fireEnchanted', 'nun-fire-enchanted.png'],
+    ['fireGreatsword', 'nun-fire-greatsword.png']
+  ].forEach(function (entry) {
+    const image = new Image();
+    image.decoding = 'async';
+    image.src = 'assets/effects/' + entry[1] + '?v=' + AVATAR_VERSION;
+    nunTextures[entry[0]] = image;
+  });
+
+  function nunTextureReady(key) {
+    const image = nunTextures[key];
+    return !!(image && image.complete && image.naturalWidth > 0);
+  }
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1273,6 +1296,7 @@
       formId: formId || DEFAULT_SKIN_ID,
       nunForm: 'demon',
       nunSwing: 0,
+      nunAttack: { phase: 'idle', time: 0, angle: 0, damage: 0, qActive: false, hit: false },
       nunCooldowns: {
         demon: { q: 0, e: 0 },
         fire: { q: 0, e: 0 }
@@ -3464,6 +3488,7 @@
       nunSkills.e.active = 0;
       nunSkills.r.active = 0;
       nunSkills.nunSwing = 0;
+      nunSkills.nunAttack = { phase: 'idle', time: 0, angle: 0, damage: 0, qActive: false, hit: false };
     }
   }
 
@@ -4564,6 +4589,7 @@
     skills.e.active = 0;
     skills.r.active = 0;
     skills.nunSwing = 0;
+    skills.nunAttack = { phase: 'idle', time: 0, angle: 0, damage: 0, qActive: false, hit: false };
     skills.q.cooldown = skills.nunCooldowns[target].q;
     skills.e.cooldown = skills.nunCooldowns[target].e;
     game.nunSwords = [];
@@ -4589,12 +4615,28 @@
     const q = p.skills.q;
     const qActive = q.active > 0;
     const speedMult = qActive ? NUN_CONFIG.fireQ.attackSpeedMultiplier : 1;
-    p.shootCd = Math.max(0.05, stats.fireInterval / speedMult);
-    p.skills.nunSwing = 1;
+    const interval = Math.max(0.05, stats.fireInterval / speedMult);
+    p.shootCd = interval;
     const extra = qActive
       ? NUN_CONFIG.fireQ.bonusDamage + NUN_CONFIG.fireQ.bonusPerStage * (game.stage || 1)
       : 0;
     const damage = stats.damage * NUN_CONFIG.fireMelee.fireDamageMult + extra;
+    const duration = Math.min(0.24, Math.max(0.07, interval * 0.72));
+    p.skills.nunAttack = {
+      phase: 'windup',
+      time: duration * 0.26,
+      total: duration,
+      angle: p.aimAngle,
+      damage: damage,
+      qActive: qActive,
+      hit: false
+    };
+    p.skills.nunSwing = 1;
+  }
+
+  function resolveNunMeleeHit(angle, damage, qActive) {
+    if (!game || !game.player || game.player.dead) return;
+    const p = game.player;
     const range = NUN_CONFIG.fireMelee.fireRange;
     const halfArc = NUN_CONFIG.fireMelee.fireArc * 0.5;
     for (let i = 0; i < game.enemies.length; i += 1) {
@@ -4602,7 +4644,7 @@
       if (enemy.dead || enemy.charmed) continue;
       const d = Math.hypot(enemy.x - p.x, enemy.y - p.y);
       if (d > range + enemy.r) continue;
-      let diff = Math.atan2(enemy.y - p.y, enemy.x - p.x) - p.aimAngle;
+      let diff = Math.atan2(enemy.y - p.y, enemy.x - p.x) - angle;
       while (diff > Math.PI) diff -= TAU;
       while (diff < -Math.PI) diff += TAU;
       if (Math.abs(diff) > halfArc) continue;
@@ -4617,14 +4659,14 @@
     if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
       const boss = game.eventBoss;
       const d = Math.hypot(boss.x - p.x, boss.y - p.y);
-      let diff = Math.atan2(boss.y - p.y, boss.x - p.x) - p.aimAngle;
+      let diff = Math.atan2(boss.y - p.y, boss.x - p.x) - angle;
       while (diff > Math.PI) diff -= TAU;
       while (diff < -Math.PI) diff += TAU;
       if (d <= range + boss.r && Math.abs(diff) <= halfArc) damageEventBoss(damage, { critical: false });
     }
-    for (let i = 0; i < 7; i += 1) {
-      const a = p.aimAngle + rand(-halfArc, halfArc);
-      spawnParticle(p.x + Math.cos(a) * rand(20, 100), p.y + Math.sin(a) * rand(20, 100), Math.cos(a) * rand(40, 160), Math.sin(a) * rand(40, 160), rand(0.16, 0.35), rand(2, 5), qActive ? '#ff7048' : '#d43d55', true);
+    for (let i = 0; i < 8; i += 1) {
+      const a = angle + rand(-halfArc, halfArc);
+      spawnParticle(p.x + Math.cos(a) * rand(20, 110), p.y + Math.sin(a) * rand(20, 110), Math.cos(a) * rand(60, 200), Math.sin(a) * rand(60, 200), rand(0.16, 0.38), rand(2, 5), qActive ? '#ffb15c' : '#ff5a32', true);
     }
     audio.play('shoot_pistol');
   }
@@ -4634,15 +4676,20 @@
     const count = NUN_CONFIG.q.swordCount;
     game.nunSwords = [];
     for (let i = 0; i < count; i += 1) {
+      const orbitAngle = (i / count) * TAU;
       game.nunSwords.push({
-        angle: (i / count) * TAU,
+        angle: orbitAngle,
+        orbitAngle: orbitAngle,
         orbit: NUN_CONFIG.q.swordOrbit,
         attackTimer: rand(0, 0.3),
         target: null,
         swing: 0,
-        x: game.player.x,
-        y: game.player.y,
-        angleToTarget: 0
+        state: 'orbit',
+        hit: false,
+        x: game.player.x + Math.cos(orbitAngle) * NUN_CONFIG.q.swordOrbit,
+        y: game.player.y + Math.sin(orbitAngle) * NUN_CONFIG.q.swordOrbit,
+        angleToTarget: 0,
+        trailTimer: 0
       });
     }
   }
@@ -4670,26 +4717,80 @@
     const damage = stats.damage * NUN_CONFIG.q.weaponScale + (game.stage || 1) * NUN_CONFIG.q.stageDamage;
     for (let i = 0; i < game.nunSwords.length; i += 1) {
       const sword = game.nunSwords[i];
-      sword.angle += dt * 0.9;
-      sword.x = p.x + Math.cos(sword.angle) * sword.orbit;
-      sword.y = p.y + Math.sin(sword.angle) * sword.orbit;
-      sword.attackTimer -= dt;
-      if (sword.target && (sword.target.dead || sword.target.charmed ||
-          Math.hypot(sword.target.x - p.x, sword.target.y - p.y) > NUN_CONFIG.q.swordRange)) {
-        sword.target = null;
-      }
-      if (!sword.target) sword.target = findNunTarget(p, NUN_CONFIG.q.swordRange);
       sword.swing = Math.max(0, sword.swing - dt * 3.5);
-      if (sword.target && sword.attackTimer <= 0) {
-        sword.attackTimer = NUN_CONFIG.q.attackInterval;
-        sword.swing = 1;
-        sword.angleToTarget = Math.atan2(sword.target.y - sword.y, sword.target.x - sword.x);
-        damageEnemy(sword.target, damage, { critical: false, silent: false });
-        addRing(sword.target.x, sword.target.y, sword.target.r + 8, '#a56bff', 0.22, 2);
-        for (let k = 0; k < 5; k += 1) {
-          const a = rand(0, TAU);
-          spawnParticle(sword.target.x, sword.target.y, Math.cos(a) * rand(20, 100), Math.sin(a) * rand(20, 100), rand(0.15, 0.35), rand(2, 4), '#b983ff', true);
+      sword.trailTimer -= dt;
+      if (sword.state === 'orbit') {
+        sword.orbitAngle += dt * 0.9;
+        sword.x = p.x + Math.cos(sword.orbitAngle) * sword.orbit;
+        sword.y = p.y + Math.sin(sword.orbitAngle) * sword.orbit;
+        sword.attackTimer -= dt;
+        if (sword.target && (sword.target.dead || sword.target.charmed ||
+            Math.hypot(sword.target.x - p.x, sword.target.y - p.y) > NUN_CONFIG.q.swordRange)) {
+          sword.target = null;
         }
+        if (!sword.target) sword.target = findNunTarget(p, NUN_CONFIG.q.swordRange);
+        if (sword.target && sword.attackTimer <= 0) {
+          sword.state = 'outbound';
+          sword.hit = false;
+          sword.swing = 1;
+          sword.angleToTarget = Math.atan2(sword.target.y - sword.y, sword.target.x - sword.x);
+        }
+      } else if (sword.state === 'outbound') {
+        const target = sword.target;
+        if (!target || target.dead || target.charmed ||
+            Math.hypot(target.x - p.x, target.y - p.y) > NUN_CONFIG.q.swordRange * 1.45) {
+          sword.state = 'return';
+          sword.target = null;
+          continue;
+        }
+        const dx = target.x - sword.x;
+        const dy = target.y - sword.y;
+        const dist = Math.hypot(dx, dy);
+        sword.angleToTarget = Math.atan2(dy, dx);
+        if (dist <= target.r + 18) {
+          if (!sword.hit) {
+            sword.hit = true;
+            damageEnemy(target, damage, {
+              critical: false,
+              silent: false,
+              pushX: Math.cos(sword.angleToTarget) * 30,
+              pushY: Math.sin(sword.angleToTarget) * 30
+            });
+            addRing(target.x, target.y, target.r + 14, '#a56bff', 0.28, 3);
+            for (let k = 0; k < 8; k += 1) {
+              const a = sword.angleToTarget + rand(-0.8, 0.8);
+              spawnParticle(target.x, target.y, Math.cos(a) * rand(30, 130), Math.sin(a) * rand(30, 130), rand(0.18, 0.4), rand(2, 5), '#b983ff', true);
+            }
+            addShake(2);
+          }
+          sword.state = 'return';
+          sword.target = null;
+        } else {
+          const step = Math.min(dist, NUN_CONFIG.q.flightSpeed * dt);
+          sword.x += (dx / dist) * step;
+          sword.y += (dy / dist) * step;
+        }
+      } else {
+        const dx = p.x - sword.x;
+        const dy = p.y - sword.y;
+        const dist = Math.hypot(dx, dy);
+        sword.angleToTarget = Math.atan2(dy, dx);
+        if (dist <= p.r + 20) {
+          sword.state = 'orbit';
+          sword.hit = false;
+          sword.attackTimer = NUN_CONFIG.q.attackInterval;
+          sword.orbitAngle = Math.atan2(sword.y - p.y, sword.x - p.x);
+          sword.x = p.x + Math.cos(sword.orbitAngle) * sword.orbit;
+          sword.y = p.y + Math.sin(sword.orbitAngle) * sword.orbit;
+        } else {
+          const step = Math.min(dist, NUN_CONFIG.q.returnSpeed * dt);
+          sword.x += (dx / dist) * step;
+          sword.y += (dy / dist) * step;
+        }
+      }
+      if (sword.state !== 'orbit' && sword.trailTimer <= 0) {
+        sword.trailTimer = 0.035;
+        spawnParticle(sword.x, sword.y, rand(-20, 20), rand(-20, 20), rand(0.16, 0.3), rand(2, 4), '#a56bff', true);
       }
     }
   }
@@ -4699,12 +4800,15 @@
     game.nunTentacle = {
       x: game.player.x,
       y: game.player.y,
+      r: 38,
       time: NUN_CONFIG.e.duration,
       attackTimer: 0.5,
       phase: 'idle',
       phaseTime: 0,
       target: null,
       hit: false,
+      slamX: game.player.x,
+      slamY: game.player.y,
       hp: NUN_CONFIG.e.tentacleHp,
       hitFlash: 0
     };
@@ -4740,6 +4844,8 @@
         t.phase = 'slam';
         t.phaseTime = 0.16;
         if (t.target && !t.target.dead && !t.target.charmed) {
+          t.slamX = t.target.x;
+          t.slamY = t.target.y;
           const d = Math.hypot(t.target.x - t.x, t.target.y - t.y);
           const stats = getWeaponStats(p.weapon);
           const damage = stats.damage * NUN_CONFIG.e.weaponScale + (game.stage || 1) * NUN_CONFIG.e.stageDamage;
@@ -4890,13 +4996,15 @@
       const baseY = p.y + Math.sin(sword.angle) * NUN_CONFIG.fireR.swordOrbit;
       const dirX = Math.cos(sword.angle);
       const dirY = Math.sin(sword.angle);
-      const tipX = baseX + dirX * 110;
-      const tipY = baseY + dirY * 110;
+      const backX = baseX - dirX * NUN_CONFIG.fireR.swordBack;
+      const backY = baseY - dirY * NUN_CONFIG.fireR.swordBack;
+      const tipX = baseX + dirX * NUN_CONFIG.fireR.swordReach;
+      const tipY = baseY + dirY * NUN_CONFIG.fireR.swordReach;
       for (let j = 0; j < game.enemies.length; j += 1) {
         const enemy = game.enemies[j];
         if (enemy.dead || enemy.charmed) continue;
         if ((sword.hitTimers[enemy.uid] || 0) > 0) continue;
-        if (segmentCircleHit(baseX, baseY, tipX, tipY, enemy.x, enemy.y, enemy.r + 14)) {
+        if (segmentCircleHit(backX, backY, tipX, tipY, enemy.x, enemy.y, enemy.r + 14)) {
           sword.hitTimers[enemy.uid] = NUN_CONFIG.fireR.hitInterval;
           sword.flash = 0.15;
           damageEnemy(enemy, damage, { critical: false, silent: false });
@@ -4907,7 +5015,7 @@
         const boss = game.eventBoss;
         const key = 'eventBoss';
         if ((sword.hitTimers[key] || 0) <= 0 &&
-            segmentCircleHit(baseX, baseY, tipX, tipY, boss.x, boss.y, boss.r + 14)) {
+            segmentCircleHit(backX, backY, tipX, tipY, boss.x, boss.y, boss.r + 14)) {
           sword.hitTimers[key] = NUN_CONFIG.fireR.hitInterval;
           damageEventBoss(damage, { critical: false });
         }
@@ -4992,6 +5100,26 @@
     skills.e.cooldown = cd.e;
     skills.r.cooldown = Math.max(0, skills.r.cooldown - dt);
     skills.nunSwing = Math.max(0, skills.nunSwing - dt * 5);
+
+    const attack = skills.nunAttack;
+    if (attack && attack.phase !== 'idle') {
+      attack.time -= dt;
+      if (attack.phase === 'windup' && attack.time <= 0) {
+        attack.phase = 'slash';
+        attack.time = attack.total * 0.2;
+        if (!attack.hit) {
+          attack.hit = true;
+          resolveNunMeleeHit(attack.angle, attack.damage, attack.qActive);
+        }
+        skills.nunSwing = 1;
+      } else if (attack.phase === 'slash' && attack.time <= 0) {
+        attack.phase = 'recover';
+        attack.time = attack.total * 0.54;
+      } else if (attack.phase === 'recover' && attack.time <= 0) {
+        attack.phase = 'idle';
+        attack.time = 0;
+      }
+    }
 
     updateNunOrbs(dt);
     updateNunBullets(dt);
@@ -6088,6 +6216,16 @@
     }
   }
 
+  function getEnemyCombatTarget(enemy) {
+    if (!game || !game.player) return null;
+    const tentacle = isNunForm() ? game.nunTentacle : null;
+    if (tentacle && tentacle.hp > 0 && enemy.type !== 'boss' && !enemy.charmed) {
+      const d = Math.hypot(enemy.x - tentacle.x, enemy.y - tentacle.y);
+      if (d <= NUN_CONFIG.e.tauntRadius) return tentacle;
+    }
+    return game.player;
+  }
+
   function updateEnemies(dt) {
     if (!game || game.player.dead) return;
     const p = game.player;
@@ -6118,49 +6256,44 @@
 
       if (p.dead) break;
 
-      const dx = p.x - enemy.x;
-      const dy = p.y - enemy.y;
+      const target = getEnemyCombatTarget(enemy);
+      const dx = target.x - enemy.x;
+      const dy = target.y - enemy.y;
       const dist = Math.hypot(dx, dy);
-      const tentacle = isNunForm() ? game.nunTentacle : null;
-      if (tentacle) {
-        const tentacleDist = Math.hypot(enemy.x - tentacle.x, enemy.y - tentacle.y);
-        if (tentacleDist < NUN_CONFIG.e.tauntRadius && enemy.attackCd <= 0) {
-          enemy.attackCd = enemy.type === 'boss' ? 1.05 : 0.86;
-          enemy.attackFlash = 0.24;
-          damageNunTentacle(enemy.damage);
-          addRing(tentacle.x, tentacle.y, 28, '#8f4fff', 0.25, 2);
-          continue;
-        }
-      }
-
-      const contactDistance = enemy.r + p.r - 3;
+      const targetIsTentacle = target === game.nunTentacle;
+      const contactDistance = enemy.r + (target.r || p.r) - 3;
       const chargerBusy = enemy.variant === 'charger' && enemy.chargeState !== 'idle';
       if (dist < contactDistance && enemy.attackCd <= 0 && !chargerBusy) {
         enemy.attackCd = enemy.type === 'boss' ? 1.05 : 0.86;
         enemy.attackFlash = 0.24;
-        addRing(
-          enemy.x,
-          enemy.y,
-          enemy.r + 8,
-          enemy.ranged ? '#ffb35e' : '#ff6b7d',
-          0.24,
-          2
-        );
-        damagePlayer(enemy.damage, enemy.x, enemy.y);
-        if (p.dead) break;
+        if (targetIsTentacle) {
+          damageNunTentacle(enemy.damage);
+          addRing(target.x, target.y, 30, '#8f4fff', 0.25, 2);
+        } else {
+          addRing(
+            enemy.x,
+            enemy.y,
+            enemy.r + 8,
+            enemy.ranged ? '#ffb35e' : '#ff6b7d',
+            0.24,
+            2
+          );
+          damagePlayer(enemy.damage, enemy.x, enemy.y);
+          if (p.dead) break;
+        }
       }
     }
 
     separateEnemies();
   }
 
-  function updateChargerEnemy(enemy, dt, dist, directionX, directionY) {
+  function updateChargerEnemy(enemy, dt, dist, directionX, directionY, target) {
     const p = game.player;
     enemy.chargeCd -= dt;
 
     if (enemy.chargeState === 'idle') {
       const speed = enemy.speed * 0.58;
-      if (dist > enemy.r + p.r + 12) {
+      if (dist > enemy.r + (target.r || p.r) + 12) {
         enemy.x += (directionX * speed + enemy.pushX) * dt;
         enemy.y += (directionY * speed + enemy.pushY) * dt;
         clampToMap(enemy);
@@ -6202,13 +6335,14 @@
       enemy.chargeTravelled += dashSpeed * dt;
       enemy.chargeTime -= dt;
       clampToMap(enemy);
-      if (segmentCircleHit(oldX, oldY, enemy.x, enemy.y, p.x, p.y, p.r + enemy.r - 2)) {
+      if (segmentCircleHit(oldX, oldY, enemy.x, enemy.y, target.x, target.y, (target.r || p.r) + enemy.r - 2)) {
         enemy.attackCd = 0.9;
         enemy.chargeState = 'recover';
         enemy.chargeRecover = 0.85;
         enemy.attackFlash = 0.24;
         addRing(enemy.x, enemy.y, enemy.r + 12, '#ff4b4b', 0.3, 3);
-        damagePlayer(enemy.damage * 1.15, enemy.x, enemy.y);
+        if (target === game.nunTentacle) damageNunTentacle(enemy.damage * 1.15);
+        else damagePlayer(enemy.damage * 1.15, enemy.x, enemy.y);
       } else if (enemy.chargeTime <= 0 || enemy.chargeTravelled >= enemy.chargeDistance) {
         enemy.chargeState = 'recover';
         enemy.chargeRecover = 0.85;
@@ -6223,8 +6357,7 @@
     }
   }
 
-  function updateRangedEnemy(enemy, dt, dist, directionX, directionY) {
-    const p = game.player;
+  function updateRangedEnemy(enemy, dt, dist, directionX, directionY, target) {
     const far = STAGE_DIFFICULTY.farEnemy;
     let speed = enemy.speed * 0.82;
     let moveX = 0;
@@ -6288,26 +6421,27 @@
         dist < 620 &&
         game.enemyBullets.length < far.bulletLimit) {
       enemy.shootWindup = far.windup;
-      enemy.aimAngle = Math.atan2(p.y - enemy.y, p.x - enemy.x);
+      enemy.aimAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
       enemy.castFlash = 0.34;
     }
   }
 
   function updateRegularEnemy(enemy, dt) {
     const p = game.player;
-    const dx = p.x - enemy.x;
-    const dy = p.y - enemy.y;
+    const target = getEnemyCombatTarget(enemy);
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
     const dist = Math.max(0.001, Math.hypot(dx, dy));
     const directionX = dx / dist;
     const directionY = dy / dist;
 
     if (enemy.variant === 'charger') {
-      updateChargerEnemy(enemy, dt, dist, directionX, directionY);
+      updateChargerEnemy(enemy, dt, dist, directionX, directionY, target);
       return;
     }
 
     if (enemy.ranged) {
-      updateRangedEnemy(enemy, dt, dist, directionX, directionY);
+      updateRangedEnemy(enemy, dt, dist, directionX, directionY, target);
       return;
     }
 
@@ -6328,7 +6462,7 @@
     // 进入接触攻击距离后停止往玩家身体里挤，真正的伤害由 updateEnemies
     // 的统一近战判定执行。旧代码在 70px 处主动后退，导致 45px 左右的
     // 近战距离永远到不了，这是近战不攻击的根因。
-    const attackDistance = enemy.r + p.r - 3;
+    const attackDistance = enemy.r + (target.r || p.r) - 3;
     let moveX = 0;
     let moveY = 0;
     if (dist > attackDistance - 2) {
@@ -10455,56 +10589,81 @@
     ctx.restore();
   }
 
+  function drawNunTexture(key, x, y, angle, height, pivot, alpha) {
+    const img = nunTextures[key];
+    if (!img || !img.complete || img.naturalWidth <= 0) return false;
+    const w = height * (img.width / img.height);
+    ctx.save();
+    ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.drawImage(img, -w * 0.5, -height * pivot, w, height);
+    ctx.restore();
+    return true;
+  }
+
   function drawNunSword(p, renderY, now) {
     if (!isNunFireForm()) return;
-    const swing = p.skills.nunSwing;
+    const attack = p.skills.nunAttack || { phase: 'idle', angle: p.aimAngle, time: 0, total: 1 };
     const enchanted = p.skills.q.active > 0;
-    const angle = p.aimAngle - 0.55 + (1 - clamp(swing, 0, 1)) * 0.35;
-    drawNunBlade(
-      p.x + Math.cos(p.aimAngle) * 8,
-      renderY + Math.sin(p.aimAngle) * 8,
-      angle,
-      58 + swing * 22 + (enchanted ? 8 : 0),
-      7 + (enchanted ? 2 : 0),
-      enchanted ? '#ff9a4a' : '#ff5b39',
-      enchanted ? '#ff6b1f' : '#ff2b1b'
+    const baseAngle = attack.phase === 'idle' ? p.aimAngle : attack.angle;
+    let angle = baseAngle - 0.42;
+    let offsetX = 0;
+    let offsetY = 0;
+    if (attack.phase === 'windup') {
+      const progress = 1 - clamp(attack.time / Math.max(0.001, attack.total * 0.26), 0, 1);
+      angle = attack.angle - 0.95 + progress * 0.3;
+      offsetX = -Math.cos(attack.angle) * 9;
+      offsetY = -Math.sin(attack.angle) * 9;
+    } else if (attack.phase === 'slash') {
+      const progress = 1 - clamp(attack.time / Math.max(0.001, attack.total * 0.2), 0, 1);
+      angle = attack.angle - 0.68 + progress * 1.55;
+    } else if (attack.phase === 'recover') {
+      const progress = 1 - clamp(attack.time / Math.max(0.001, attack.total * 0.54), 0, 1);
+      angle = attack.angle + 0.87 - progress * 1.2;
+    }
+    const handX = p.x + Math.cos(baseAngle) * 9 + offsetX;
+    const handY = renderY + Math.sin(baseAngle) * 9 + offsetY;
+    const planted = drawNunTexture(
+      enchanted ? 'fireEnchanted' : 'fireSword',
+      handX, handY, angle - Math.PI * 0.5,
+      enchanted ? 150 : 132, 0.24, 1
     );
-    if (enchanted) {
+    if (!planted) {
+      drawNunBlade(handX, handY, angle, 62, 8, enchanted ? '#ff9a4a' : '#ff5b39', '#ff2b1b');
+    }
+    if ((attack.phase === 'slash' || attack.phase === 'recover') && nunTextureReady('fireSlash')) {
+      const slashAngle = angle + 0.2;
       ctx.save();
-      ctx.translate(p.x + Math.cos(p.aimAngle) * 22, renderY + Math.sin(p.aimAngle) * 22);
-      ctx.rotate(angle);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = '#ff5a22';
-      ctx.beginPath();
-      ctx.ellipse(48, 0, 30, 15, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.8;
-      ctx.fillStyle = '#ffb15c';
-      for (let i = 0; i < 3; i += 1) {
-        ctx.beginPath();
-        ctx.ellipse(64 + i * 9, Math.sin(now * 0.02 + i) * 5, 9 - i * 2, 4, 0, 0, TAU);
-        ctx.fill();
-      }
+      ctx.globalAlpha = attack.phase === 'slash' ? 0.95 : 0.35;
+      ctx.translate(p.x, renderY);
+      ctx.rotate(slashAngle + Math.PI * 0.5);
+      const h = 172;
+      const img = nunTextures.fireSlash;
+      const w = h * (img.width / img.height);
+      ctx.drawImage(img, -w * 0.5, -h * 0.5, w, h);
       ctx.restore();
+    }
+    if (attack.phase === 'slash' || attack.phase === 'recover') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.45;
-      ctx.strokeStyle = '#ffb15c';
-      ctx.lineWidth = 3;
+      ctx.globalAlpha = attack.phase === 'slash' ? 0.55 : 0.25;
+      ctx.strokeStyle = '#ff8050';
+      ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.arc(p.x, renderY, p.r + 10, p.aimAngle - 1.1, p.aimAngle + 0.9);
+      ctx.arc(p.x, renderY, 78, angle - 0.8, angle + 0.35);
       ctx.stroke();
       ctx.restore();
     }
-    if (swing > 0.05) {
+    if (enchanted && attack.phase === 'idle') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = swing * 0.4;
-      ctx.strokeStyle = '#ff8050';
-      ctx.lineWidth = 4;
+      ctx.globalAlpha = 0.35 + Math.sin(now * 0.01) * 0.08;
+      ctx.strokeStyle = '#ffb15c';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(p.x, renderY, 70, p.aimAngle - 0.9, p.aimAngle + 0.55);
+      ctx.arc(p.x, renderY, p.r + 11, baseAngle - 1.1, baseAngle + 0.9);
       ctx.stroke();
       ctx.restore();
     }
@@ -10527,25 +10686,42 @@
       ctx.lineTo(bx, by);
       ctx.stroke();
       ctx.restore();
-      drawNunBlade(bx, by, sword.angle, 122, 15, '#ff5a32', '#ff2614');
+      const cx = bx + Math.cos(sword.angle) * 66;
+      const cy = by + Math.sin(sword.angle) * 66;
+      if (!drawNunTexture('fireGreatsword', cx, cy, sword.angle - Math.PI * 0.5, 190, 0.5, 1)) {
+        drawNunBlade(bx, by, sword.angle, 122, 15, '#ff5a32', '#ff2614');
+      }
     }
   }
 
   function drawNunEntities() {
     if (!game || !isNunForm()) return;
     const p = game.player;
-    // Three orbiting demon swords.
+    // Three independent demon swords: orbit, fly out, hit, return.
     for (let i = 0; i < game.nunSwords.length; i += 1) {
       const sword = game.nunSwords[i];
-      const swingAngle = sword.swing > 0 ? sword.angleToTarget : sword.angle + Math.PI * 0.5;
-      drawNunBlade(sword.x, sword.y, swingAngle, 43, 6, '#a56bff', '#6d36d8');
+      const angle = sword.state === 'orbit' ? sword.angle + Math.PI * 0.5 : sword.angleToTarget;
+      const h = sword.state === 'orbit' ? 58 : 68;
+      if (!drawNunTexture('demonSword', sword.x, sword.y, angle - Math.PI * 0.5, h, 0.5, 1)) {
+        drawNunBlade(sword.x, sword.y, angle, 43, 6, '#a56bff', '#6d36d8');
+      }
+      if (sword.state !== 'orbit') {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.18;
+        ctx.strokeStyle = '#a56bff';
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(sword.x - Math.cos(angle) * 22, sword.y - Math.sin(angle) * 22);
+        ctx.lineTo(sword.x, sword.y);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
-    // Fixed tentacle with raise/slam/recover animation.
+    // Fixed tentacle with raise/slam/recover animation and impact texture.
     const t = game.nunTentacle;
     if (t) {
       const phase = t.phase;
-      const tipX = t.x + (phase === 'slam' ? 0 : Math.sin(performance.now() * 0.002) * 8);
-      const tipY = t.y - (phase === 'raise' ? 92 : phase === 'slam' ? 8 : 48);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.strokeStyle = 'rgba(143,79,255,0.18)';
@@ -10553,46 +10729,56 @@
       ctx.beginPath();
       ctx.arc(t.x, t.y, NUN_CONFIG.e.tauntRadius, 0, TAU);
       ctx.stroke();
-      ctx.strokeStyle = t.hitFlash > 0 ? '#e0c7ff' : '#7d3de0';
-      ctx.lineWidth = 22;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(t.x, t.y + 25);
-      ctx.quadraticCurveTo(t.x + 20, t.y - 40, tipX, tipY);
-      ctx.stroke();
-      ctx.strokeStyle = '#b98aff';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(t.x, t.y + 20);
-      ctx.quadraticCurveTo(t.x + 18, t.y - 35, tipX, tipY);
-      ctx.stroke();
-      ctx.fillStyle = '#d8b8ff';
-      ctx.beginPath();
-      ctx.arc(tipX, tipY, 15, 0, TAU);
-      ctx.fill();
       ctx.restore();
+      const sway = phase === 'raise'
+        ? Math.sin(performance.now() * 0.008) * 0.08
+        : phase === 'slam' ? 0.32 : Math.sin(performance.now() * 0.002) * 0.025;
+      const height = phase === 'raise' ? 188 : phase === 'slam' ? 150 : 170;
+      if (!drawNunTexture('tentacle', t.x, t.y + 22, sway, height, 1, 1)) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = t.hitFlash > 0 ? '#e0c7ff' : '#7d3de0';
+        ctx.lineWidth = 22;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(t.x, t.y + 25);
+        ctx.quadraticCurveTo(t.x + 20, t.y - 40, t.x + sway * 100, t.y - 92);
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (t.hitFlash > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = Math.min(0.65, t.hitFlash * 3.5);
+        ctx.fillStyle = '#e0c7ff';
+        ctx.beginPath();
+        ctx.ellipse(t.x, t.y - 70, 52, 82, sway, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+      if ((phase === 'slam' || phase === 'recover') && nunTextureReady('tentacleImpact')) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = phase === 'slam' ? 1 : Math.max(0, t.phaseTime / 0.45);
+        const img = nunTextures.tentacleImpact;
+        const h = 120;
+        const w = h * (img.width / img.height);
+        ctx.drawImage(img, t.slamX - w * 0.5, t.slamY - h * 0.5, w, h);
+        ctx.restore();
+      }
     }
-    // Purple wave bullets.
+    // Purple dagger wave bullets from the supplied R sheet.
     for (let i = 0; i < game.nunBullets.length; i += 1) {
       const b = game.nunBullets[i];
-      ctx.save();
-      ctx.globalAlpha = 0.3;
-      ctx.strokeStyle = '#7435d8';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(b.x - b.vx * 0.035, b.y - b.vy * 0.035);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#7c3ce0';
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, b.radius + 1, 0, TAU);
-      ctx.fill();
-      ctx.fillStyle = '#c9a2ff';
-      ctx.beginPath();
-      ctx.arc(b.x - 1, b.y - 1, b.radius * 0.55, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+      if (!drawNunTexture('demonBullet', b.x, b.y, Math.atan2(b.vy, b.vx) - Math.PI * 0.5, 22, 0.5, 1)) {
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#7c3ce0';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius + 1, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
     }
     drawNunGreatSwords();
     // Red life orbs.
