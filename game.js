@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-21';
-  const BULLET_VERSION = '20261020-21';
+  const AVATAR_VERSION = '20261020-22';
+  const BULLET_VERSION = '20261020-22';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1420,6 +1420,11 @@
     resumeBtn: $('resumeBtn'),
     pauseRestartBtn: $('pauseRestartBtn'),
     pauseMenuBtn: $('pauseMenuBtn'),
+    pauseSkillsBtn: $('pauseSkillsBtn'),
+    skillIntroClose: $('skillIntroClose'),
+    skillIntroBack: $('skillIntroBack'),
+    skillIntroForm: $('skillIntroForm'),
+    skillIntroGrid: $('skillIntroGrid'),
     resultTitle: $('resultTitle'),
     gameOverMode: $('gameOverMode'),
     newRecordBadge: $('newRecordBadge'),
@@ -1501,6 +1506,7 @@
     menu: $('menuScreen'),
     upgrade: $('upgradeScreen'),
     pause: $('pauseScreen'),
+    skillIntro: $('skillIntroScreen'),
     gameover: $('gameOverScreen'),
     shop: $('shopScreen'),
     inventory: $('inventoryScreen'),
@@ -1522,6 +1528,7 @@
   let activeStore = null;
   let storeReturn = null;
   let statsPanelOpen = false;
+  let skillIntroOpen = false;
   let lastSkillBarRefresh = -1;
   let lastStatsPanelRefresh = -1;
   let skillSlots = [];
@@ -2511,6 +2518,14 @@
       return;
     }
 
+    if (skillIntroOpen) {
+      if (code === 'Escape') {
+        event.preventDefault();
+        closeSkillIntro();
+      }
+      return;
+    }
+
     if (event.repeat) return;
 
     if (activeStore) {
@@ -2946,6 +2961,91 @@
     }
     audio.play('start');
     lastFrameTime = performance.now();
+  }
+
+  function skillIntroDetails(form, slot, def) {
+    const lines = [];
+    if (!form || !def) return lines;
+    if (form.id === 'korean') {
+      if (slot === 'q') {
+        lines.push('AOE 半径 ' + (def.aoeRadius || 132) + '，每次挥拳命中范围内全部敌人。');
+        lines.push('伤害 = 当前装备武器最终实际攻击力 × ' + (def.damageMultiplier || 2) + '（含升级、被动加成）。');
+        lines.push('近战击杀恢复 ' + (def.healPerKill || 1) + ' HP；每名敌人每次死亡只结算一次。');
+        lines.push('Q 完整 6 秒期间无敌；3 秒时断掉一臂并显示“阿一古”，剩余手臂攻击间隔 ' + (def.attackInterval || 0.55) + ' → ' + (def.oneArmInterval || 0.275) + ' 秒。');
+      } else if (slot === 'e') {
+        lines.push('爆炸伤害 = 当前关卡 × ' + (def.damagePerStage || 20) + '。');
+        lines.push('自动索敌并接近，目标消失会重新寻找；进入爆炸范围后一次性自爆。');
+        lines.push('冷却 ' + def.cooldown + ' 秒，僵尸生命周期 ' + def.duration + ' 秒。');
+      } else if (slot === 'r') {
+        lines.push('每累计击杀 ' + def.requiredKills + ' 名敌人获得 1 次释放机会，可累计多次。');
+        lines.push('关卡伤害：1–5 关 600，6–10 关 1200，11–15 关 1500，16–20 关 2000。');
+        lines.push('马头落地范围伤害不受武器伤害倍率影响；未充能时无法释放。');
+      }
+    } else if (form.id === 'edg') {
+      if (slot === 'q') {
+        lines.push('持续 5 秒，射速翻倍并获得无限弹药；不改变单发伤害。');
+      } else if (slot === 'e') {
+        lines.push('持续 5 秒，每次有效击杀恢复 1 HP；不超过最大生命值。');
+      } else if (slot === 'r') {
+        if (def.damageSequence) lines.push('消耗 30 杀，5 次射击伤害：' + def.damageSequence.join(' / ') + '。');
+        lines.push('镰刀弹伤害按当前关卡增加，不吃武器伤害倍率或暴击。');
+      }
+    } else if (form.id === 'edg2026') {
+      if (slot === 'q') {
+        lines.push('冻结敌人、Boss 与敌方弹幕 1.5 秒；玩家仍可移动、瞄准和射击。');
+      } else if (slot === 'e') {
+        lines.push('合同爆炸伤害 ' + (def.explosionDamage || 160) + '，半径 ' + (def.explosionRadius || 170) + '。');
+        lines.push('只传送普通敌人；Boss 和精英只受到范围伤害。');
+      } else if (slot === 'r') {
+        lines.push('记录 4 秒，随后有 2 秒确认窗口；再次释放回到记录位置并恢复记录生命。');
+      }
+    }
+    return lines;
+  }
+
+  function renderSkillIntro() {
+    if (!el.skillIntroGrid || !el.skillIntroForm) return;
+    const form = getCurrentForm();
+    if (!form || !form.skills) {
+      el.skillIntroForm.textContent = '当前形态 · 技能未开放';
+      el.skillIntroGrid.innerHTML = '<p class="skill-intro-desc">该形态暂未配置 Q / E / 大招。</p>';
+      return;
+    }
+    el.skillIntroForm.textContent = form.name + ' · ' + (form.title || '') + ' · 当前形态';
+    const slots = ['q', 'e', 'r'];
+    el.skillIntroGrid.innerHTML = slots.map(function (slot) {
+      const def = form.skills[slot];
+      if (!def) return '';
+      const meta = [];
+      if (def.cooldown) meta.push('冷却 ' + def.cooldown + 's');
+      if (def.duration) meta.push('持续 ' + def.duration + 's');
+      if (def.requiredKills) meta.push('充能 ' + def.requiredKills + ' 杀');
+      const details = skillIntroDetails(form, slot, def);
+      return '<article class="skill-intro-card">' +
+        '<div class="skill-intro-card-head">' +
+          '<img class="skill-intro-card-icon" src="' + def.icon + '?v=' + AVATAR_VERSION + '" alt="">' +
+          '<div><h3>' + def.slot + ' · ' + def.name + '</h3>' +
+          '<p class="skill-intro-meta">' + meta.join(' · ') + '</p></div>' +
+        '</div>' +
+        '<p class="skill-intro-desc">' + def.desc + '</p>' +
+        (details.length ? '<ul class="skill-intro-extra">' + details.map(function (line) {
+          return '<li>' + line + '</li>';
+        }).join('') + '</ul>' : '') +
+      '</article>';
+    }).join('');
+  }
+
+  function openSkillIntro() {
+    if (state !== S.PAUSED || !game) return;
+    renderSkillIntro();
+    skillIntroOpen = true;
+    showScreen('skillIntro');
+  }
+
+  function closeSkillIntro() {
+    if (!skillIntroOpen) return;
+    skillIntroOpen = false;
+    showScreen('pause');
   }
 
   function pauseGame() {
@@ -8789,11 +8889,12 @@
     const fallOffset = (1 - progress) * 420;
     const drawX = ult.x;
     const drawY = ult.y - fallOffset;
-    const scale = 1 + progress * 0.25;
+    // 贴图整体放大，但伤害半径仍由 impactKoreanHorse 的 180 判定控制。
+    const scale = 1.24 + progress * 0.3;
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,' + (0.16 + progress * 0.24) + ')';
     ctx.beginPath();
-    ctx.ellipse(ult.x, ult.y + 18, 66 + progress * 70, 18 + progress * 20, 0, 0, TAU);
+    ctx.ellipse(ult.x, ult.y + 18, 80 + progress * 78, 21 + progress * 22, 0, 0, TAU);
     ctx.fill();
     ctx.translate(drawX, drawY);
     ctx.scale(scale, scale);
@@ -10500,6 +10601,9 @@
     if (el.pauseShopBtn) el.pauseShopBtn.addEventListener('click', function () { openStore('shop', 'pause'); });
     if (el.pauseInventoryBtn) el.pauseInventoryBtn.addEventListener('click', function () { openStore('inventory', 'pause'); });
     if (el.pauseStatsBtn) el.pauseStatsBtn.addEventListener('click', function () { openStatsPanel(true); });
+    if (el.pauseSkillsBtn) el.pauseSkillsBtn.addEventListener('click', openSkillIntro);
+    if (el.skillIntroClose) el.skillIntroClose.addEventListener('click', closeSkillIntro);
+    if (el.skillIntroBack) el.skillIntroBack.addEventListener('click', closeSkillIntro);
     if (el.shopBackBtn) el.shopBackBtn.addEventListener('click', closeStore);
     if (el.inventoryBackBtn) el.inventoryBackBtn.addEventListener('click', closeStore);
     if (el.shopCards) el.shopCards.addEventListener('click', handleSkinAction);

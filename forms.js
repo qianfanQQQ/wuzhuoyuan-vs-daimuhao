@@ -135,7 +135,14 @@
           cooldown: 12,
           duration: 6,
           cooldownStartsOnCast: true,
-          desc: '召唤双臂近战 6 秒；3 秒后断一臂并提示“阿一古”，剩余手臂攻速翻倍。'
+          aoeRadius: 132,
+          healPerKill: 1,
+          invulnerable: true,
+          breakAt: 3,
+          attackInterval: 0.55,
+          oneArmInterval: 0.275,
+          damageMultiplier: 2,
+          desc: '召唤双臂进行 6 秒 AOE 近战；3 秒后断一臂并显示“阿一古”，剩余手臂攻速翻倍。'
         },
         e: {
           slot: 'E',
@@ -149,6 +156,7 @@
           duration: 5.2,
           explosionRadius: 105,
           zombieSpeed: 145,
+          damagePerStage: 20,
           desc: '召唤自爆僵尸自动追踪敌人，进入范围后爆炸，造成关卡数 × 20 伤害。'
         },
         r: {
@@ -160,6 +168,12 @@
           icon: 'assets/skills/korean-r.svg',
           effect: 'koreanHorse',
           requiredKills: 48,
+          damageTiers: [
+            { from: 1, to: 5, damage: 600 },
+            { from: 6, to: 10, damage: 1200 },
+            { from: 11, to: 15, damage: 1500 },
+            { from: 16, to: 20, damage: 2000 }
+          ],
           desc: '每击杀 48 名敌人获得一次释放机会；巨大马头砸下，按关卡造成 600/1200/1500/2000 伤害。'
         }
       }
