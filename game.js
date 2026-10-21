@@ -51,6 +51,38 @@
     }, BRIDE_SKILL_DEFS.r || {})
   };
 
+  const NUN_FORM_DEF = window.CharacterForms ? window.CharacterForms.getById('nun') : null;
+  const NUN_DEMON_DEFS = NUN_FORM_DEF && NUN_FORM_DEF.skills ? NUN_FORM_DEF.skills : {};
+  const NUN_FIRE_DEFS = NUN_FORM_DEF && NUN_FORM_DEF.fireSkills ? NUN_FORM_DEF.fireSkills : {};
+  const NUN_CONFIG = {
+    q: Object.assign({
+      cooldown: 10, duration: 6, swordCount: 3, swordOrbit: 76,
+      swordRange: 380, attackInterval: 0.7, weaponScale: 1, stageDamage: 5
+    }, NUN_DEMON_DEFS.q || {}),
+    e: Object.assign({
+      cooldown: 14, duration: 8, attackRange: 230, attackInterval: 1.25,
+      tauntRadius: 260, tentacleHp: 240, weaponScale: 1.2, stageDamage: 8
+    }, NUN_DEMON_DEFS.e || {}),
+    r: Object.assign({
+      cooldown: 50, waves: 10, waveInterval: 0.22, bulletsPerWave: 18,
+      bulletSpeed: 270, bulletLife: 2.2
+    }, NUN_DEMON_DEFS.r || {}),
+    fireQ: Object.assign({
+      cooldown: 15, duration: 5, attackSpeedMultiplier: 2,
+      bonusDamage: 10, bonusPerStage: 2
+    }, NUN_FIRE_DEFS.q || {}),
+    fireE: Object.assign({
+      cooldown: 25, duration: 10, healPerOrb: 2, orbSpeed: 240
+    }, NUN_FIRE_DEFS.e || {}),
+    fireR: Object.assign({
+      cooldown: 50, duration: 10, swordCount: 3, swordOrbit: 112,
+      stageDamage: 60, hitInterval: 0.45
+    }, NUN_FIRE_DEFS.r || {}),
+    fireMelee: Object.assign({
+      fireRange: 132, fireArc: 1.65, fireDamageMult: 1
+    }, NUN_FORM_DEF && NUN_FORM_DEF.baseAttack ? NUN_FORM_DEF.baseAttack : {})
+  };
+
   const STAGE_BOSS_STAGES = [5, 10, 15, 20];
   const STAGE_BOSS_CONFIG = {
     5: { tier: 1, hp: 4200, damageMult: 1, cooldownMult: 1, countBonus: 0, speedMult: 1 },
@@ -411,7 +443,7 @@
     },
     {
       id: 'nun',
-      name: '特蕾拉修女',
+      name: '双生魔女',
       price: 3500,
       file: 'theresa-nun.png',
       accent: '#b8a2ff',
@@ -419,7 +451,7 @@
       fallbackColorA: '#2c2344',
       fallbackColorB: '#b8a2ff',
       badge: '传说',
-      desc: '黑裙与烛光教堂，气场全开的特蕾拉修女造型。'
+      desc: '恶魔魔剑与烈焰巨剑共生的双形态魔女。'
     }
   ];
   const SKIN_BY_ID = SKINS.reduce(function (map, skin) {
@@ -914,8 +946,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-26';
-  const BULLET_VERSION = '20261020-26';
+  const AVATAR_VERSION = '20261020-27';
+  const BULLET_VERSION = '20261020-27';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1227,12 +1259,24 @@
 
   function getFormSkill(slot, formId) {
     if (!window.CharacterForms) return null;
-    return CharacterForms.getSkill(formId || getCurrentFormId(), slot);
+    const id = formId || getCurrentFormId();
+    const form = CharacterForms.getById(id);
+    if (form && form.id === 'nun') {
+      const set = getNunSubform() === 'fire' ? form.fireSkills : form.skills;
+      return set ? (set[slot] || null) : null;
+    }
+    return CharacterForms.getSkill(id, slot);
   }
 
   function createSkillState(formId, kills) {
     return {
       formId: formId || DEFAULT_SKIN_ID,
+      nunForm: 'demon',
+      nunSwing: 0,
+      nunCooldowns: {
+        demon: { q: 0, e: 0 },
+        fire: { q: 0, e: 0 }
+      },
       q: {
         cooldown: 0,
         active: 0,
@@ -1295,6 +1339,29 @@
       !!window.CharacterForms && CharacterForms.hasSkills('bride');
   }
 
+  function isNunForm() {
+    return !!game && game.player && game.player.formId === 'nun' &&
+      !!window.CharacterForms && CharacterForms.hasSkills('nun');
+  }
+
+  function getNunSubform() {
+    return game && game.player && game.player.skills
+      ? (game.player.skills.nunForm || 'demon') : 'demon';
+  }
+
+  function isNunFireForm() {
+    return isNunForm() && getNunSubform() === 'fire';
+  }
+
+  function getFormSkillSet(form) {
+    if (!form) return null;
+    if (form.id === 'nun') {
+      return getNunSubform() === 'fire' && form.fireSkills
+        ? form.fireSkills : form.skills;
+    }
+    return form.skills;
+  }
+
   function isChampionForm() {
     return !!game && game.player && game.player.formId === 'edg2026' &&
       !!window.CharacterForms && CharacterForms.hasSkills('edg2026');
@@ -1313,8 +1380,8 @@
 
   function currentUltimateUsesSpace() {
     const form = getCurrentForm();
-    return !!(form && form.implemented && form.skills && form.skills.r &&
-      form.skills.r.code === 'Space');
+    const set = getFormSkillSet(form);
+    return !!(form && form.implemented && set && set.r && set.r.code === 'Space');
   }
 
   function hasInfiniteAmmo() {
@@ -2874,6 +2941,12 @@
       brideProjectiles: [],
       brideLink: null,
       brideCharmedUid: null,
+      nunSwords: [],
+      nunTentacle: null,
+      nunBullets: [],
+      nunGreatSwords: [],
+      nunOrbs: [],
+      nunUltimate: null,
       eventBoss: null,
       eventBossActive: false,
       eventBossDefeated: false,
@@ -3018,7 +3091,30 @@
   function skillIntroDetails(form, slot, def) {
     const lines = [];
     if (!form || !def) return lines;
-    if (form.id === 'bride') {
+    if (form.id === 'nun') {
+      const fire = getNunSubform() === 'fire';
+      if (!fire) {
+        if (slot === 'q') {
+          lines.push('召唤 3 把独立紫色魔剑环绕自身，自动分别索敌；6 秒持续，冷却 10 秒。');
+          lines.push('单次伤害 = 当前武器最终攻击力 × 1 + 关卡 × 5。');
+        } else if (slot === 'e') {
+          lines.push('在当前位置召唤固定触手，持续 8 秒，冷却 14 秒；触手会吸引附近攻击并砸击范围敌人。');
+          lines.push('触手伤害 = 当前武器最终攻击力 × 1.2 + 关卡 × 8。');
+        } else if (slot === 'r') {
+          lines.push('连续发射 10 波环形紫色剑气，每发伤害等于发射时当前武器最终单发伤害。');
+          lines.push('大招冷却 50 秒；结束后自动切换火焰形态。');
+        }
+      } else {
+        if (slot === 'q') {
+          lines.push('5 秒内近战攻速翻倍，冷却 15 秒；每次攻击额外造成 10 + 2×关卡 固定伤害。');
+        } else if (slot === 'e') {
+          lines.push('持续 10 秒，冷却 25 秒；击杀生成红色生命球，每个吸收恢复 2 HP。');
+        } else if (slot === 'r') {
+          lines.push('召唤 3 把巨型火焰魔剑环绕旋转 10 秒；每次命中造成 60×关卡 伤害。');
+          lines.push('与恶魔形态大招共用 50 秒冷却；结束后自动返回恶魔形态。');
+        }
+      }
+    } else if (form.id === 'bride') {
       if (slot === 'q') {
         lines.push('粉白爱心命中普通敌人后魅惑 10 秒；Boss 免疫魅惑。');
         lines.push('同一时间最多控制 1 名敌人；魅惑敌人会攻击其他敌人，10 秒后自动死亡。');
@@ -3071,15 +3167,18 @@
   function renderSkillIntro() {
     if (!el.skillIntroGrid || !el.skillIntroForm) return;
     const form = getCurrentForm();
-    if (!form || !form.skills) {
+    const skillSet = getFormSkillSet(form);
+    if (!form || !skillSet) {
       el.skillIntroForm.textContent = '当前形态 · 技能未开放';
       el.skillIntroGrid.innerHTML = '<p class="skill-intro-desc">该形态暂未配置 Q / E / 大招。</p>';
       return;
     }
-    el.skillIntroForm.textContent = form.name + ' · ' + (form.title || '') + ' · 当前形态';
+    const subLabel = form.id === 'nun'
+      ? (getNunSubform() === 'fire' ? '火焰形态' : '恶魔形态') : '当前形态';
+    el.skillIntroForm.textContent = form.name + ' · ' + (form.title || '') + ' · ' + subLabel;
     const slots = ['q', 'e', 'r'];
     el.skillIntroGrid.innerHTML = slots.map(function (slot) {
-      const def = form.skills[slot];
+      const def = skillSet[slot];
       if (!def) return '';
       const meta = [];
       if (def.cooldown) meta.push('冷却 ' + def.cooldown + 's');
@@ -3351,6 +3450,23 @@
     }
   }
 
+  function clearNunWorldState() {
+    if (!game) return;
+    game.nunSwords = [];
+    game.nunTentacle = null;
+    game.nunBullets = [];
+    game.nunGreatSwords = [];
+    game.nunOrbs = [];
+    game.nunUltimate = null;
+    if (game.player && game.player.skills) {
+      const nunSkills = game.player.skills;
+      nunSkills.q.active = 0;
+      nunSkills.e.active = 0;
+      nunSkills.r.active = 0;
+      nunSkills.nunSwing = 0;
+    }
+  }
+
   function syncPlayerForm() {
     if (!game || !game.player) return;
     const nextFormId = getCurrentFormId();
@@ -3359,6 +3475,7 @@
     clearChampionWorldState();
     clearKoreanWorldState();
     clearBrideWorldState();
+    clearNunWorldState();
     p.formId = nextFormId;
     p.skills = createSkillState(nextFormId, game.kills);
     // 切换形态时旧的技能效果必须立即失效，射速回到新形态的当前实际值。
@@ -3370,6 +3487,7 @@
     clearChampionWorldState();
     clearKoreanWorldState();
     clearBrideWorldState();
+    clearNunWorldState();
     const skills = game.player.skills;
     skills.q.active = 0;
     skills.e.active = 0;
@@ -3393,7 +3511,7 @@
     const q = skills.q;
     const qWasActive = q.active > 0;
     q.active = Math.max(0, q.active - dt);
-    q.cooldown = Math.max(0, q.cooldown - dt);
+    if (!isNunForm()) q.cooldown = Math.max(0, q.cooldown - dt);
     if (qWasActive && q.active <= 0) {
       if (champion) {
         releaseDelayedPlayerBullets();
@@ -3418,7 +3536,7 @@
 
     const e = skills.e;
     e.active = Math.max(0, e.active - dt);
-    e.cooldown = Math.max(0, e.cooldown - dt);
+    if (!isNunForm()) e.cooldown = Math.max(0, e.cooldown - dt);
     skills.r.castFlash = Math.max(0, skills.r.castFlash - dt);
 
     if (champion) {
@@ -3447,18 +3565,24 @@
 
     if (isKoreanForm()) updateKoreanSkills(dt);
     if (isBrideForm()) updateBrideSkills(dt);
+    if (isNunForm()) updateNunSkills(dt);
   }
 
   function castSkill(slot) {
     if (!game || state !== S.PLAYING || !game.player || game.player.dead) return false;
     syncPlayerForm();
     const form = getCurrentForm();
-    if (!form || !form.implemented || !form.skills) return false;
-    const def = form.skills[slot];
+    const skillSet = getFormSkillSet(form);
+    if (!form || !form.implemented || !skillSet) return false;
+    const def = skillSet[slot];
     if (!def) return false;
     const p = game.player;
     const skills = p.skills;
     if (!skills) return false;
+
+    if (form.id === 'nun') {
+      return castNunSkill(slot, form, def);
+    }
 
     if (form.id === 'edg2026') {
       return castChampionSkill(slot, form, def);
@@ -4425,6 +4549,487 @@
     }
   }
 
+  function getNunCooldowns(subform) {
+    if (!game || !game.player || !game.player.skills) return { q: 0, e: 0 };
+    return game.player.skills.nunCooldowns[subform || getNunSubform()];
+  }
+
+  function switchNunForm(nextForm, silent) {
+    if (!game || !game.player || !game.player.skills) return;
+    const p = game.player;
+    const skills = p.skills;
+    const target = nextForm === 'fire' ? 'fire' : 'demon';
+    skills.nunForm = target;
+    skills.q.active = 0;
+    skills.e.active = 0;
+    skills.r.active = 0;
+    skills.nunSwing = 0;
+    skills.q.cooldown = skills.nunCooldowns[target].q;
+    skills.e.cooldown = skills.nunCooldowns[target].e;
+    game.nunSwords = [];
+    game.nunTentacle = null;
+    game.nunBullets = [];
+    game.nunGreatSwords = [];
+    game.nunOrbs = [];
+    game.nunUltimate = null;
+    p.reloading = false;
+    p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+    if (!silent) {
+      addToast(target === 'fire' ? '双生魔女 · 火焰形态' : '双生魔女 · 恶魔形态', 'info', 1.5);
+    }
+    refreshSkillBar(true);
+    refreshStatsPanel(true);
+  }
+
+  function nunMeleeAttack() {
+    if (!game || !game.player || game.player.dead || !isNunFireForm()) return;
+    const p = game.player;
+    if (p.shootCd > 0) return;
+    const stats = getWeaponStats(p.weapon);
+    const q = p.skills.q;
+    const qActive = q.active > 0;
+    const speedMult = qActive ? NUN_CONFIG.fireQ.attackSpeedMultiplier : 1;
+    p.shootCd = Math.max(0.05, stats.fireInterval / speedMult);
+    p.skills.nunSwing = 1;
+    const extra = qActive
+      ? NUN_CONFIG.fireQ.bonusDamage + NUN_CONFIG.fireQ.bonusPerStage * (game.stage || 1)
+      : 0;
+    const damage = stats.damage * NUN_CONFIG.fireMelee.fireDamageMult + extra;
+    const range = NUN_CONFIG.fireMelee.fireRange;
+    const halfArc = NUN_CONFIG.fireMelee.fireArc * 0.5;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead || enemy.charmed) continue;
+      const d = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+      if (d > range + enemy.r) continue;
+      let diff = Math.atan2(enemy.y - p.y, enemy.x - p.x) - p.aimAngle;
+      while (diff > Math.PI) diff -= TAU;
+      while (diff < -Math.PI) diff += TAU;
+      if (Math.abs(diff) > halfArc) continue;
+      damageEnemy(enemy, damage, {
+        critical: false,
+        silent: false,
+        pushX: (enemy.x - p.x) * 0.18,
+        pushY: (enemy.y - p.y) * 0.18
+      });
+      addRing(enemy.x, enemy.y, enemy.r + 8, qActive ? '#ff7048' : '#e04a57', 0.22, 2);
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+      const boss = game.eventBoss;
+      const d = Math.hypot(boss.x - p.x, boss.y - p.y);
+      let diff = Math.atan2(boss.y - p.y, boss.x - p.x) - p.aimAngle;
+      while (diff > Math.PI) diff -= TAU;
+      while (diff < -Math.PI) diff += TAU;
+      if (d <= range + boss.r && Math.abs(diff) <= halfArc) damageEventBoss(damage, { critical: false });
+    }
+    for (let i = 0; i < 7; i += 1) {
+      const a = p.aimAngle + rand(-halfArc, halfArc);
+      spawnParticle(p.x + Math.cos(a) * rand(20, 100), p.y + Math.sin(a) * rand(20, 100), Math.cos(a) * rand(40, 160), Math.sin(a) * rand(40, 160), rand(0.16, 0.35), rand(2, 5), qActive ? '#ff7048' : '#d43d55', true);
+    }
+    audio.play('shoot_pistol');
+  }
+
+  function spawnNunSwords() {
+    if (!game) return;
+    const count = NUN_CONFIG.q.swordCount;
+    game.nunSwords = [];
+    for (let i = 0; i < count; i += 1) {
+      game.nunSwords.push({
+        angle: (i / count) * TAU,
+        orbit: NUN_CONFIG.q.swordOrbit,
+        attackTimer: rand(0, 0.3),
+        target: null,
+        swing: 0,
+        x: game.player.x,
+        y: game.player.y,
+        angleToTarget: 0
+      });
+    }
+  }
+
+  function findNunTarget(source, range) {
+    if (!game) return null;
+    let best = null;
+    let bestDist = range;
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead || enemy.charmed) continue;
+      const d = Math.hypot(enemy.x - source.x, enemy.y - source.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = enemy;
+      }
+    }
+    return best;
+  }
+
+  function updateNunSwords(dt) {
+    if (!game || !game.nunSwords.length) return;
+    const p = game.player;
+    const stats = getWeaponStats(p.weapon);
+    const damage = stats.damage * NUN_CONFIG.q.weaponScale + (game.stage || 1) * NUN_CONFIG.q.stageDamage;
+    for (let i = 0; i < game.nunSwords.length; i += 1) {
+      const sword = game.nunSwords[i];
+      sword.angle += dt * 0.9;
+      sword.x = p.x + Math.cos(sword.angle) * sword.orbit;
+      sword.y = p.y + Math.sin(sword.angle) * sword.orbit;
+      sword.attackTimer -= dt;
+      if (sword.target && (sword.target.dead || sword.target.charmed ||
+          Math.hypot(sword.target.x - p.x, sword.target.y - p.y) > NUN_CONFIG.q.swordRange)) {
+        sword.target = null;
+      }
+      if (!sword.target) sword.target = findNunTarget(p, NUN_CONFIG.q.swordRange);
+      sword.swing = Math.max(0, sword.swing - dt * 3.5);
+      if (sword.target && sword.attackTimer <= 0) {
+        sword.attackTimer = NUN_CONFIG.q.attackInterval;
+        sword.swing = 1;
+        sword.angleToTarget = Math.atan2(sword.target.y - sword.y, sword.target.x - sword.x);
+        damageEnemy(sword.target, damage, { critical: false, silent: false });
+        addRing(sword.target.x, sword.target.y, sword.target.r + 8, '#a56bff', 0.22, 2);
+        for (let k = 0; k < 5; k += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(sword.target.x, sword.target.y, Math.cos(a) * rand(20, 100), Math.sin(a) * rand(20, 100), rand(0.15, 0.35), rand(2, 4), '#b983ff', true);
+        }
+      }
+    }
+  }
+
+  function spawnNunTentacle() {
+    if (!game) return;
+    game.nunTentacle = {
+      x: game.player.x,
+      y: game.player.y,
+      time: NUN_CONFIG.e.duration,
+      attackTimer: 0.5,
+      phase: 'idle',
+      phaseTime: 0,
+      target: null,
+      hit: false,
+      hp: NUN_CONFIG.e.tentacleHp,
+      hitFlash: 0
+    };
+  }
+
+  function damageNunTentacle(amount) {
+    if (!game || !game.nunTentacle) return;
+    const t = game.nunTentacle;
+    t.hp -= Math.max(1, amount);
+    t.hitFlash = 0.18;
+    if (t.hp <= 0) {
+      addRing(t.x, t.y, 40, '#8f4fff', 0.5, 3);
+      game.nunTentacle = null;
+    }
+  }
+
+  function updateNunTentacle(dt) {
+    if (!game || !game.nunTentacle) return;
+    const t = game.nunTentacle;
+    const p = game.player;
+    t.time -= dt;
+    t.hitFlash = Math.max(0, t.hitFlash - dt);
+    t.attackTimer -= dt;
+    if (t.target && (t.target.dead || t.target.charmed)) t.target = null;
+    if (!t.target) t.target = findNunTarget(t, NUN_CONFIG.e.attackRange);
+    if (t.phase === 'idle' && t.target && t.attackTimer <= 0) {
+      t.phase = 'raise';
+      t.phaseTime = 0.36;
+      t.hit = false;
+    } else if (t.phase === 'raise') {
+      t.phaseTime -= dt;
+      if (t.phaseTime <= 0) {
+        t.phase = 'slam';
+        t.phaseTime = 0.16;
+        if (t.target && !t.target.dead && !t.target.charmed) {
+          const d = Math.hypot(t.target.x - t.x, t.target.y - t.y);
+          const stats = getWeaponStats(p.weapon);
+          const damage = stats.damage * NUN_CONFIG.e.weaponScale + (game.stage || 1) * NUN_CONFIG.e.stageDamage;
+          if (d <= NUN_CONFIG.e.attackRange) {
+            const slamX = t.target.x;
+            const slamY = t.target.y;
+            for (let i = 0; i < game.enemies.length; i += 1) {
+              const enemy = game.enemies[i];
+              if (enemy.dead || enemy.charmed) continue;
+              if (Math.hypot(enemy.x - slamX, enemy.y - slamY) <= 90 + enemy.r) {
+                damageEnemy(enemy, damage, { critical: false, silent: false });
+              }
+            }
+            if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated &&
+                Math.hypot(game.eventBoss.x - slamX, game.eventBoss.y - slamY) <= 90 + game.eventBoss.r) {
+              damageEventBoss(damage, { critical: false });
+            }
+            addRing(slamX, slamY, 90, '#8f4fff', 0.35, 3);
+          }
+        }
+        audio.play('explosion');
+      }
+    } else if (t.phase === 'slam') {
+      t.phaseTime -= dt;
+      if (t.phaseTime <= 0) {
+        t.phase = 'recover';
+        t.phaseTime = 0.45;
+      }
+    } else if (t.phase === 'recover') {
+      t.phaseTime -= dt;
+      if (t.phaseTime <= 0) {
+        t.phase = 'idle';
+        t.attackTimer = NUN_CONFIG.e.attackInterval;
+      }
+    }
+    if (t.time <= 0) game.nunTentacle = null;
+  }
+
+  function spawnNunOrb(x, y) {
+    if (!game) return;
+    game.nunOrbs.push({ x: x, y: y, time: 12, phase: rand(0, TAU), dead: false });
+  }
+
+  function updateNunOrbs(dt) {
+    if (!game) return;
+    const p = game.player;
+    for (let i = 0; i < game.nunOrbs.length; i += 1) {
+      const orb = game.nunOrbs[i];
+      if (orb.dead) continue;
+      orb.time -= dt;
+      const dx = p.x - orb.x;
+      const dy = p.y - orb.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d <= p.r + 13) {
+        healPlayer(NUN_CONFIG.fireE.healPerOrb, false);
+        addRing(orb.x, orb.y, 8, '#ff4f6d', 0.25, 2);
+        orb.dead = true;
+      } else {
+        const speed = NUN_CONFIG.fireE.orbSpeed;
+        orb.x += (dx / d) * speed * dt;
+        orb.y += (dy / d) * speed * dt;
+      }
+      if (orb.time <= 0) orb.dead = true;
+    }
+    game.nunOrbs = game.nunOrbs.filter(function (orb) { return !orb.dead; });
+  }
+
+  function fireNunDemonWave() {
+    if (!game || !game.nunUltimate) return;
+    const p = game.player;
+    const stats = getWeaponStats(p.weapon);
+    const count = NUN_CONFIG.r.bulletsPerWave;
+    const offset = rand(0, TAU);
+    for (let i = 0; i < count; i += 1) {
+      const angle = offset + (i / count) * TAU;
+      game.nunBullets.push({
+        x: p.x + Math.cos(angle) * (p.r + 10),
+        y: p.y + Math.sin(angle) * (p.r + 10),
+        vx: Math.cos(angle) * NUN_CONFIG.r.bulletSpeed,
+        vy: Math.sin(angle) * NUN_CONFIG.r.bulletSpeed,
+        life: NUN_CONFIG.r.bulletLife,
+        radius: 5,
+        damage: stats.damage,
+        dead: false
+      });
+    }
+    addRing(p.x, p.y, p.r + 18, '#9b5cff', 0.2, 2);
+  }
+
+  function updateNunBullets(dt) {
+    if (!game || !game.nunBullets.length) return;
+    for (let i = 0; i < game.nunBullets.length; i += 1) {
+      const bullet = game.nunBullets[i];
+      if (bullet.dead) continue;
+      bullet.life -= dt;
+      bullet.x += bullet.vx * dt;
+      bullet.y += bullet.vy * dt;
+      if (bullet.life <= 0 || bullet.x < 0 || bullet.x > MAP.w || bullet.y < 0 || bullet.y > MAP.h) {
+        bullet.dead = true;
+        continue;
+      }
+      for (let j = 0; j < game.enemies.length; j += 1) {
+        const enemy = game.enemies[j];
+        if (enemy.dead || enemy.charmed) continue;
+        if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) <= enemy.r + bullet.radius) {
+          damageEnemy(enemy, bullet.damage, { critical: false, silent: true });
+          addRing(bullet.x, bullet.y, 8, '#b983ff', 0.2, 2);
+          bullet.dead = true;
+          break;
+        }
+      }
+      if (!bullet.dead && game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+        const boss = game.eventBoss;
+        if (Math.hypot(boss.x - bullet.x, boss.y - bullet.y) <= boss.r + bullet.radius) {
+          damageEventBoss(bullet.damage, { critical: false });
+          bullet.dead = true;
+        }
+      }
+    }
+    game.nunBullets = game.nunBullets.filter(function (bullet) { return !bullet.dead; });
+  }
+
+  function spawnNunGreatSwords() {
+    if (!game) return;
+    game.nunGreatSwords = [];
+    for (let i = 0; i < NUN_CONFIG.fireR.swordCount; i += 1) {
+      game.nunGreatSwords.push({
+        angle: (i / NUN_CONFIG.fireR.swordCount) * TAU,
+        hitTimers: Object.create(null),
+        flash: 0
+      });
+    }
+  }
+
+  function updateNunGreatSwords(dt) {
+    if (!game || !game.nunGreatSwords.length) return;
+    const p = game.player;
+    const stage = game.stage || 1;
+    const damage = NUN_CONFIG.fireR.stageDamage * stage;
+    for (let i = 0; i < game.nunGreatSwords.length; i += 1) {
+      const sword = game.nunGreatSwords[i];
+      sword.angle += dt * 2.0;
+      sword.flash = Math.max(0, sword.flash - dt);
+      Object.keys(sword.hitTimers).forEach(function (key) {
+        sword.hitTimers[key] = Math.max(0, sword.hitTimers[key] - dt);
+      });
+      const baseX = p.x + Math.cos(sword.angle) * NUN_CONFIG.fireR.swordOrbit;
+      const baseY = p.y + Math.sin(sword.angle) * NUN_CONFIG.fireR.swordOrbit;
+      const dirX = Math.cos(sword.angle);
+      const dirY = Math.sin(sword.angle);
+      const tipX = baseX + dirX * 110;
+      const tipY = baseY + dirY * 110;
+      for (let j = 0; j < game.enemies.length; j += 1) {
+        const enemy = game.enemies[j];
+        if (enemy.dead || enemy.charmed) continue;
+        if ((sword.hitTimers[enemy.uid] || 0) > 0) continue;
+        if (segmentCircleHit(baseX, baseY, tipX, tipY, enemy.x, enemy.y, enemy.r + 14)) {
+          sword.hitTimers[enemy.uid] = NUN_CONFIG.fireR.hitInterval;
+          sword.flash = 0.15;
+          damageEnemy(enemy, damage, { critical: false, silent: false });
+          addRing(enemy.x, enemy.y, enemy.r + 14, '#ff4b37', 0.25, 3);
+        }
+      }
+      if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated) {
+        const boss = game.eventBoss;
+        const key = 'eventBoss';
+        if ((sword.hitTimers[key] || 0) <= 0 &&
+            segmentCircleHit(baseX, baseY, tipX, tipY, boss.x, boss.y, boss.r + 14)) {
+          sword.hitTimers[key] = NUN_CONFIG.fireR.hitInterval;
+          damageEventBoss(damage, { critical: false });
+        }
+      }
+    }
+  }
+
+  function castNunSkill(slot, form, def) {
+    if (!game || !game.player || game.player.dead) return false;
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return false;
+    const sub = getNunSubform();
+    const cd = skills.nunCooldowns[sub];
+    if (slot === 'q') {
+      if (skills.q.active > 0 || cd.q > 0) return false;
+      skills.q.active = def.duration;
+      cd.q = def.cooldown;
+      skills.q.cooldown = def.cooldown;
+      if (sub === 'demon') spawnNunSwords();
+      addToast(sub === 'demon' ? 'Q · 三魔剑' : 'Q · 烈焰狂舞', 'good', 1.3);
+      pulseSkillSlot('q');
+      refreshSkillBar(true);
+      return true;
+    }
+    if (slot === 'e') {
+      if (skills.e.active > 0 || cd.e > 0) return false;
+      skills.e.active = def.duration;
+      cd.e = def.cooldown;
+      skills.e.cooldown = def.cooldown;
+      if (sub === 'demon') spawnNunTentacle();
+      addToast(sub === 'demon' ? 'E · 深渊触手' : 'E · 血焰收割', 'good', 1.3);
+      pulseSkillSlot('e');
+      refreshSkillBar(true);
+      return true;
+    }
+    if (slot === 'r') {
+      if (skills.r.active > 0 || skills.r.cooldown > 0) return false;
+      skills.r.cooldown = def.cooldown;
+      if (sub === 'demon') {
+        skills.q.active = 0;
+        skills.e.active = 0;
+        game.nunSwords = [];
+        game.nunTentacle = null;
+        game.nunBullets = [];
+        game.nunUltimate = {
+          form: 'demon',
+          time: NUN_CONFIG.r.waves * NUN_CONFIG.r.waveInterval + 0.55,
+          waveTimer: 0,
+          wavesFired: 0
+        };
+        skills.r.active = game.nunUltimate.time;
+        addToast('R · 魔剑轮舞', 'good', 1.4);
+      } else {
+        skills.q.active = 0;
+        skills.e.active = 0;
+        game.nunOrbs = [];
+        game.nunUltimate = { form: 'fire', time: NUN_CONFIG.fireR.duration };
+        skills.r.active = NUN_CONFIG.fireR.duration;
+        spawnNunGreatSwords();
+        addToast('R · 三界巨剑', 'good', 1.4);
+      }
+      audio.play('boss_warn');
+      pulseSkillSlot('r');
+      refreshSkillBar(true);
+      return true;
+    }
+    return false;
+  }
+
+  function updateNunSkills(dt) {
+    if (!game || !game.player || !isNunForm()) return;
+    const p = game.player;
+    const skills = p.skills;
+    const sub = skills.nunForm;
+    const cd = skills.nunCooldowns[sub];
+    Object.keys(skills.nunCooldowns).forEach(function (key) {
+      skills.nunCooldowns[key].q = Math.max(0, skills.nunCooldowns[key].q - dt);
+      skills.nunCooldowns[key].e = Math.max(0, skills.nunCooldowns[key].e - dt);
+    });
+    skills.q.cooldown = cd.q;
+    skills.e.cooldown = cd.e;
+    skills.r.cooldown = Math.max(0, skills.r.cooldown - dt);
+    skills.nunSwing = Math.max(0, skills.nunSwing - dt * 5);
+
+    updateNunOrbs(dt);
+    updateNunBullets(dt);
+
+    if (sub === 'demon') {
+      if (skills.q.active > 0) updateNunSwords(dt);
+      else game.nunSwords = [];
+      if (game.nunTentacle) updateNunTentacle(dt);
+      if (skills.e.active <= 0) game.nunTentacle = null;
+      if (skills.r.active > 0 && game.nunUltimate && game.nunUltimate.form === 'demon') {
+        const ult = game.nunUltimate;
+        ult.time -= dt;
+        ult.waveTimer -= dt;
+        if (ult.wavesFired < NUN_CONFIG.r.waves && ult.waveTimer <= 0) {
+          fireNunDemonWave();
+          ult.wavesFired += 1;
+          ult.waveTimer = NUN_CONFIG.r.waveInterval;
+        }
+        skills.r.active = Math.max(0, ult.time);
+        if (ult.time <= 0) {
+          switchNunForm('fire');
+        }
+      }
+    } else {
+      game.nunSwords = [];
+      game.nunTentacle = null;
+      if (skills.r.active > 0 && game.nunUltimate && game.nunUltimate.form === 'fire') {
+        const ult = game.nunUltimate;
+        ult.time -= dt;
+        skills.r.active = Math.max(0, ult.time);
+        updateNunGreatSwords(dt);
+        if (ult.time <= 0) {
+          switchNunForm('demon');
+        }
+      }
+    }
+  }
+
   function findSafeSkillPosition(originX, originY, radius, ignoreEnemy, avoidPlayer) {
     if (!game) return null;
     const p = game.player;
@@ -4776,8 +5381,12 @@
     return damage === undefined ? null : { damage: damage, index: index };
   }
 
-  function onEnemyKilled() {
+  function onEnemyKilled(enemy) {
     if (!game || !game.player || game.player.dead) return;
+    if (isNunForm() && getNunSubform() === 'fire' &&
+        game.player.skills.e.active > 0 && enemy) {
+      spawnNunOrb(enemy.x, enemy.y);
+    }
     if (isKoreanForm() && game.player.skills) {
       const r = game.player.skills.r;
       r.killProgress += 1;
@@ -4844,6 +5453,12 @@
     if (p.dead) return;
 
     updateAim();
+
+    if (isNunFireForm()) {
+      const firing = input.mouse.down || input.fireHeld;
+      if (firing && p.shootCd <= 0) nunMeleeAttack();
+      return;
+    }
 
     if (p.reloading) {
       p.reloadRemaining -= dt;
@@ -5506,6 +6121,18 @@
       const dx = p.x - enemy.x;
       const dy = p.y - enemy.y;
       const dist = Math.hypot(dx, dy);
+      const tentacle = isNunForm() ? game.nunTentacle : null;
+      if (tentacle) {
+        const tentacleDist = Math.hypot(enemy.x - tentacle.x, enemy.y - tentacle.y);
+        if (tentacleDist < NUN_CONFIG.e.tauntRadius && enemy.attackCd <= 0) {
+          enemy.attackCd = enemy.type === 'boss' ? 1.05 : 0.86;
+          enemy.attackFlash = 0.24;
+          damageNunTentacle(enemy.damage);
+          addRing(tentacle.x, tentacle.y, 28, '#8f4fff', 0.25, 2);
+          continue;
+        }
+      }
+
       const contactDistance = enemy.r + p.r - 3;
       const chargerBusy = enemy.variant === 'charger' && enemy.chargeState !== 'idle';
       if (dist < contactDistance && enemy.attackCd <= 0 && !chargerBusy) {
@@ -6285,7 +6912,7 @@
     game.enemyBullets = [];
     game.companionBullets = [];
     game.kills += 1;
-    onEnemyKilled();
+    onEnemyKilled({ x: bx, y: by });
     game.player.invuln = Math.max(game.player.invuln, 2);
 
     addShake(24);
@@ -6604,7 +7231,7 @@
     }
     addRing(enemy.x, enemy.y, enemy.r, enemy.ring, enemy.type === 'boss' ? 1 : 0.42, enemy.type === 'boss' ? 4 : 2);
     spawnXpOrbs(enemy);
-    onEnemyKilled();
+    onEnemyKilled(enemy);
     audio.play('kill');
 
     if (enemy.type === 'boss') {
@@ -7546,6 +8173,14 @@
         continue;
       }
 
+      const tentacle = isNunForm() ? game.nunTentacle : null;
+      if (tentacle && segmentCircleHit(oldX, oldY, nextX, nextY, tentacle.x, tentacle.y, 38 + bullet.radius)) {
+        bullet.dead = true;
+        damageNunTentacle(bullet.damage);
+        addRing(tentacle.x, tentacle.y, 32, '#8f4fff', 0.2, 2);
+        continue;
+      }
+
       if (!p.dead && segmentCircleHit(oldX, oldY, nextX, nextY, p.x, p.y, p.r + bullet.radius)) {
         bullet.dead = true;
         damagePlayer(bullet.damage, oldX, oldY);
@@ -8057,7 +8692,9 @@
     drawRewindEcho();
     drawBrideAura();
     drawBrideLinks();
+    drawNunAura();
     drawCharacters(now);
+    drawNunEntities();
     drawKoreanZombie();
     drawBullets();
     drawSkillProjectiles();
@@ -9253,7 +9890,11 @@
     drawBrideWings(now);
     drawBrideDashAura(now);
     const koreanMelee = isKoreanForm() && isKoreanMeleeActive();
-    if (!koreanMelee) drawPlayerWeapon(p, renderY);
+    const nunFire = isNunFireForm();
+    if (!koreanMelee) {
+      if (nunFire) drawNunSword(p, renderY, now);
+      else drawPlayerWeapon(p, renderY);
+    }
     if (koreanMelee) drawKoreanArms(now);
 
     ctx.globalAlpha = deathAlpha * invulnBlink;
@@ -9265,7 +9906,7 @@
 
     if (koreanMelee) drawKoreanAguh(now);
 
-    if (!koreanMelee && p.muzzle > 0) {
+    if (!koreanMelee && !nunFire && p.muzzle > 0) {
       const mx = p.x + Math.cos(p.aimAngle) * (p.r + 29);
       const my = renderY + Math.sin(p.aimAngle) * (p.r + 29);
       const weapon = WEAPONS[p.weapon];
@@ -9740,6 +10381,235 @@
         ctx.fill();
         ctx.restore();
       }
+    }
+  }
+
+  function drawNunBlade(x, y, angle, length, width, color, glow) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.moveTo(0, -width * 1.8);
+    ctx.lineTo(length, 0);
+    ctx.lineTo(0, width * 1.8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#18111f';
+    ctx.beginPath();
+    ctx.moveTo(-8, -width);
+    ctx.lineTo(length + 7, -width * 0.45);
+    ctx.lineTo(length + 16, 0);
+    ctx.lineTo(length + 7, width * 0.45);
+    ctx.lineTo(-8, width);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(-5, -width * 0.62);
+    ctx.lineTo(length, -width * 0.26);
+    ctx.lineTo(length + 9, 0);
+    ctx.lineTo(length, width * 0.26);
+    ctx.lineTo(-5, width * 0.62);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = glow;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = '#d8b8ff';
+    ctx.fillRect(2, -1, 12, 2);
+    ctx.restore();
+  }
+
+  function drawNunAura() {
+    if (!game || !game.player || !isNunForm()) return;
+    const p = game.player;
+    const fire = getNunSubform() === 'fire';
+    const t = performance.now() * 0.001;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(p.x, p.y, p.r * 0.5, p.x, p.y, p.r * 3.4);
+    glow.addColorStop(0, fire ? 'rgba(255,70,40,0.16)' : 'rgba(151,91,255,0.16)');
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 3.4, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = fire ? 'rgba(255,91,57,0.5)' : 'rgba(170,111,255,0.48)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r + 8 + Math.sin(t * 4) * 2, 0, TAU);
+    ctx.stroke();
+    for (let i = 0; i < 5; i += 1) {
+      const a = t * (fire ? 1.8 : 0.7) + (i / 5) * TAU;
+      const rr = p.r * (1.8 + (i % 2) * 0.5);
+      ctx.fillStyle = fire ? 'rgba(255,93,44,0.55)' : 'rgba(179,121,255,0.5)';
+      ctx.beginPath();
+      ctx.arc(p.x + Math.cos(a) * rr, p.y + Math.sin(a) * rr, fire ? 3 : 2, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawNunSword(p, renderY, now) {
+    if (!isNunFireForm()) return;
+    const swing = p.skills.nunSwing;
+    const enchanted = p.skills.q.active > 0;
+    const angle = p.aimAngle - 0.55 + (1 - clamp(swing, 0, 1)) * 0.35;
+    drawNunBlade(
+      p.x + Math.cos(p.aimAngle) * 8,
+      renderY + Math.sin(p.aimAngle) * 8,
+      angle,
+      58 + swing * 22 + (enchanted ? 8 : 0),
+      7 + (enchanted ? 2 : 0),
+      enchanted ? '#ff9a4a' : '#ff5b39',
+      enchanted ? '#ff6b1f' : '#ff2b1b'
+    );
+    if (enchanted) {
+      ctx.save();
+      ctx.translate(p.x + Math.cos(p.aimAngle) * 22, renderY + Math.sin(p.aimAngle) * 22);
+      ctx.rotate(angle);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#ff5a22';
+      ctx.beginPath();
+      ctx.ellipse(48, 0, 30, 15, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = '#ffb15c';
+      for (let i = 0; i < 3; i += 1) {
+        ctx.beginPath();
+        ctx.ellipse(64 + i * 9, Math.sin(now * 0.02 + i) * 5, 9 - i * 2, 4, 0, 0, TAU);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#ffb15c';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(p.x, renderY, p.r + 10, p.aimAngle - 1.1, p.aimAngle + 0.9);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (swing > 0.05) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = swing * 0.4;
+      ctx.strokeStyle = '#ff8050';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(p.x, renderY, 70, p.aimAngle - 0.9, p.aimAngle + 0.55);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawNunGreatSwords() {
+    if (!game || !game.nunGreatSwords.length || !isNunForm()) return;
+    const p = game.player;
+    for (let i = 0; i < game.nunGreatSwords.length; i += 1) {
+      const sword = game.nunGreatSwords[i];
+      const bx = p.x + Math.cos(sword.angle) * NUN_CONFIG.fireR.swordOrbit;
+      const by = p.y + Math.sin(sword.angle) * NUN_CONFIG.fireR.swordOrbit;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = '#ff4b25';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(bx, by);
+      ctx.stroke();
+      ctx.restore();
+      drawNunBlade(bx, by, sword.angle, 122, 15, '#ff5a32', '#ff2614');
+    }
+  }
+
+  function drawNunEntities() {
+    if (!game || !isNunForm()) return;
+    const p = game.player;
+    // Three orbiting demon swords.
+    for (let i = 0; i < game.nunSwords.length; i += 1) {
+      const sword = game.nunSwords[i];
+      const swingAngle = sword.swing > 0 ? sword.angleToTarget : sword.angle + Math.PI * 0.5;
+      drawNunBlade(sword.x, sword.y, swingAngle, 43, 6, '#a56bff', '#6d36d8');
+    }
+    // Fixed tentacle with raise/slam/recover animation.
+    const t = game.nunTentacle;
+    if (t) {
+      const phase = t.phase;
+      const tipX = t.x + (phase === 'slam' ? 0 : Math.sin(performance.now() * 0.002) * 8);
+      const tipY = t.y - (phase === 'raise' ? 92 : phase === 'slam' ? 8 : 48);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(143,79,255,0.18)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, NUN_CONFIG.e.tauntRadius, 0, TAU);
+      ctx.stroke();
+      ctx.strokeStyle = t.hitFlash > 0 ? '#e0c7ff' : '#7d3de0';
+      ctx.lineWidth = 22;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(t.x, t.y + 25);
+      ctx.quadraticCurveTo(t.x + 20, t.y - 40, tipX, tipY);
+      ctx.stroke();
+      ctx.strokeStyle = '#b98aff';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(t.x, t.y + 20);
+      ctx.quadraticCurveTo(t.x + 18, t.y - 35, tipX, tipY);
+      ctx.stroke();
+      ctx.fillStyle = '#d8b8ff';
+      ctx.beginPath();
+      ctx.arc(tipX, tipY, 15, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Purple wave bullets.
+    for (let i = 0; i < game.nunBullets.length; i += 1) {
+      const b = game.nunBullets[i];
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#7435d8';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(b.x - b.vx * 0.035, b.y - b.vy * 0.035);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#7c3ce0';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.radius + 1, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#c9a2ff';
+      ctx.beginPath();
+      ctx.arc(b.x - 1, b.y - 1, b.radius * 0.55, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    drawNunGreatSwords();
+    // Red life orbs.
+    for (let i = 0; i < game.nunOrbs.length; i += 1) {
+      const orb = game.nunOrbs[i];
+      const bob = Math.sin(performance.now() * 0.006 + orb.phase) * 3;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = '#ff354f';
+      ctx.beginPath();
+      ctx.arc(orb.x, orb.y + bob, 7, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#ffd0d6';
+      ctx.beginPath();
+      ctx.arc(orb.x - 2, orb.y + bob - 2, 2, 0, TAU);
+      ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -10589,42 +11459,69 @@
     const weapon = WEAPONS[p.weapon];
     const maxMag = weaponMaxMag(p.weapon);
     const infinite = hasInfiniteAmmo();
-    drawWeaponIcon(p.weapon, x + 34, y + 30, 28, weapon.color);
+    const melee = isNunFireForm();
+    if (melee) {
+      ctx.save();
+      ctx.translate(x + 32, y + 30);
+      ctx.rotate(-0.7);
+      ctx.fillStyle = '#ff5b39';
+      ctx.beginPath();
+      ctx.moveTo(-2, -5); ctx.lineTo(24, -2); ctx.lineTo(27, 0); ctx.lineTo(24, 2); ctx.lineTo(-2, 5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillRect(-8, -2, 9, 4);
+      ctx.restore();
+    } else {
+      drawWeaponIcon(p.weapon, x + 34, y + 30, 28, weapon.color);
+    }
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     setFont(14, 800);
     ctx.fillStyle = '#eaf8ff';
-    ctx.fillText(weapon.name, x + 62, y + 24);
+    ctx.fillText(melee ? '火焰魔剑' : weapon.name, x + 62, y + 24);
     setMonoFont(8, 700);
     ctx.fillStyle = '#68869a';
-    ctx.fillText('0' + weapon.key + ' · 武器', x + 62, y + 38);
+    ctx.fillText(melee ? '近战 · 属性来自 ' + weapon.short : '0' + weapon.key + ' · 武器', x + 62, y + 38);
 
-    const ammo = p.ammo[p.weapon];
-    setMonoFont(infinite ? 22 : 25, 800);
-    ctx.fillStyle = infinite ? '#ffcf66' : (ammo === 0 ? '#ff5f77' : '#fff3d5');
-    ctx.fillText(infinite ? '∞' : String(ammo), x + 62, y + 64);
-    setMonoFont(10, 700);
-    ctx.fillStyle = infinite ? '#ffcf66' : '#738b9e';
-    ctx.fillText(infinite ? '无限弹药' : '/ ' + maxMag, x + 62 + ctx.measureText(infinite ? '∞' : String(ammo)).width + 6, y + 64);
-
-    if (infinite) {
+    if (melee) {
+      setMonoFont(18, 800);
+      ctx.fillStyle = '#ff8050';
+      ctx.fillText('近战', x + 62, y + 64);
+      setMonoFont(10, 700);
+      ctx.fillStyle = '#738b9e';
+      ctx.fillText('无需换弹', x + 108, y + 64);
       ctx.textAlign = 'right';
       setFont(8, 700);
       ctx.fillStyle = '#ffcf66';
-      ctx.fillText('Q · 极速射击生效中', x + w - 12, y + 64);
-    } else if (p.reloading) {
-      const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
-      drawBar(x + 160, y + 56, 104, 5, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
-      setFont(8.5, 700);
-      ctx.fillStyle = '#ffcf66';
-      ctx.textAlign = 'right';
-      ctx.fillText('装填中 ' + p.reloadRemaining.toFixed(1) + 's', x + w - 12, y + 72);
+      ctx.fillText('Q 火焰附魔中', x + w - 12, y + 64);
     } else {
-      setFont(8.5, 600);
-      ctx.fillStyle = '#607b8e';
-      ctx.textAlign = 'right';
-      ctx.fillText('R 换弹', x + w - 12, y + 72);
+      const ammo = p.ammo[p.weapon];
+      setMonoFont(infinite ? 22 : 25, 800);
+      ctx.fillStyle = infinite ? '#ffcf66' : (ammo === 0 ? '#ff5f77' : '#fff3d5');
+      ctx.fillText(infinite ? '∞' : String(ammo), x + 62, y + 64);
+      setMonoFont(10, 700);
+      ctx.fillStyle = infinite ? '#ffcf66' : '#738b9e';
+      ctx.fillText(infinite ? '无限弹药' : '/ ' + maxMag, x + 62 + ctx.measureText(infinite ? '∞' : String(ammo)).width + 6, y + 64);
+
+      if (infinite) {
+        ctx.textAlign = 'right';
+        setFont(8, 700);
+        ctx.fillStyle = '#ffcf66';
+        ctx.fillText('Q · 极速射击生效中', x + w - 12, y + 64);
+      } else if (p.reloading) {
+        const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
+        drawBar(x + 160, y + 56, 104, 5, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
+        setFont(8.5, 700);
+        ctx.fillStyle = '#ffcf66';
+        ctx.textAlign = 'right';
+        ctx.fillText('装填中 ' + p.reloadRemaining.toFixed(1) + 's', x + w - 12, y + 72);
+      } else {
+        setFont(8.5, 600);
+        ctx.fillStyle = '#607b8e';
+        ctx.textAlign = 'right';
+        ctx.fillText('R 换弹', x + w - 12, y + 72);
+      }
     }
 
     const slotsY = y + 82;
@@ -10751,22 +11648,46 @@
     const wpX = view.w - wpW - 12;
     const wpY = view.h < 340 ? 50 : 68;
     drawPanel(wpX, wpY, wpW, wpH, 11, 'rgba(8,15,24,0.82)', 'rgba(103,181,214,0.16)');
-    drawWeaponIcon(p.weapon, wpX + 16, wpY + 16, 14, WEAPONS[p.weapon].color);
+    const melee = isNunFireForm();
+    if (melee) {
+      ctx.save();
+      ctx.translate(wpX + 15, wpY + 15);
+      ctx.rotate(-0.7);
+      ctx.fillStyle = '#ff5b39';
+      ctx.beginPath();
+      ctx.moveTo(-1, -3); ctx.lineTo(15, -1); ctx.lineTo(17, 0); ctx.lineTo(15, 1); ctx.lineTo(-1, 3);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    } else {
+      drawWeaponIcon(p.weapon, wpX + 16, wpY + 16, 14, WEAPONS[p.weapon].color);
+    }
     ctx.textAlign = 'left';
     setFont(10, 800);
     ctx.fillStyle = '#eaf8ff';
-    ctx.fillText(WEAPONS[p.weapon].name, wpX + 34, wpY + 14);
-    const infinite = hasInfiniteAmmo();
-    setMonoFont(infinite ? 13 : 15, 800);
-    ctx.fillStyle = infinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
-    ctx.fillText(infinite ? '∞' : String(p.ammo[p.weapon]), wpX + 34, wpY + 33);
-    setMonoFont(8, 700);
-    ctx.fillStyle = '#70889a';
-    ctx.fillText(infinite ? '无限' : '/ ' + weaponMaxMag(p.weapon), wpX + 58, wpY + 33);
-    ctx.textAlign = 'right';
-    setFont(7, 600);
-    ctx.fillStyle = p.reloading ? '#ffcf66' : '#607b8e';
-    ctx.fillText(p.reloading ? '装填 ' + p.reloadRemaining.toFixed(1) + 's' : 'R 换弹', wpX + wpW - 9, wpY + 41);
+    ctx.fillText(melee ? '火焰魔剑' : WEAPONS[p.weapon].name, wpX + 34, wpY + 14);
+    if (melee) {
+      setMonoFont(11, 800);
+      ctx.fillStyle = '#ff8050';
+      ctx.fillText('近战', wpX + 34, wpY + 33);
+      setFont(7, 600);
+      ctx.fillStyle = '#70889a';
+      ctx.fillText('无需换弹', wpX + 58, wpY + 33);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#ffcf66';
+      ctx.fillText('Q 附魔', wpX + wpW - 9, wpY + 41);
+    } else {
+      const infinite = hasInfiniteAmmo();
+      setMonoFont(infinite ? 13 : 15, 800);
+      ctx.fillStyle = infinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
+      ctx.fillText(infinite ? '∞' : String(p.ammo[p.weapon]), wpX + 34, wpY + 33);
+      setMonoFont(8, 700);
+      ctx.fillStyle = '#70889a';
+      ctx.fillText(infinite ? '无限' : '/ ' + weaponMaxMag(p.weapon), wpX + 58, wpY + 33);
+      ctx.textAlign = 'right';
+      setFont(7, 600);
+      ctx.fillStyle = p.reloading ? '#ffcf66' : '#607b8e';
+      ctx.fillText(p.reloading ? '装填 ' + p.reloadRemaining.toFixed(1) + 's' : 'R 换弹', wpX + wpW - 9, wpY + 41);
+    }
   }
 
   function drawCompactHUD(now) {
@@ -11192,7 +12113,8 @@
     lastSkillBarRefresh = now;
 
     const form = getCurrentForm();
-    const implemented = !!(form && form.implemented && form.skills);
+    const skillSet = getFormSkillSet(form);
+    const implemented = !!(form && form.implemented && skillSet);
     el.skillBar.classList.toggle('is-locked', !implemented);
     if (!implemented) {
       skillSlots.forEach(function (button) {
@@ -11206,7 +12128,7 @@
 
     skillSlots.forEach(function (button) {
       const slot = button.getAttribute('data-skill');
-      const def = form.skills[slot];
+      const def = skillSet[slot];
       const stateForSlot = game.player.skills ? game.player.skills[slot] : null;
       if (!def || !stateForSlot) return;
       const mask = button.querySelector('.skill-cd-mask');
@@ -11264,6 +12186,27 @@
           mask.style.height = '0%';
           timer.textContent = '';
           button.title = '十六强重开 · 就绪';
+        }
+        return;
+      }
+
+      if (form.id === 'nun') {
+        const nr = stateForSlot;
+        if (nr.active > 0) {
+          button.classList.add('is-active');
+          mask.style.height = '0%';
+          timer.textContent = nr.active.toFixed(1) + 's';
+          button.title = def.name + ' · 剩余 ' + nr.active.toFixed(1) + 's';
+        } else if (nr.cooldown > 0) {
+          button.classList.add('is-r-charging');
+          mask.style.height = ((clamp(nr.cooldown / def.cooldown, 0, 1)) * 100).toFixed(1) + '%';
+          timer.textContent = String(Math.ceil(nr.cooldown));
+          button.title = def.name + ' · 冷却 ' + Math.ceil(nr.cooldown) + 's';
+        } else {
+          button.classList.add('is-r-ready');
+          mask.style.height = '0%';
+          timer.textContent = '';
+          button.title = def.name + ' · 就绪';
         }
         return;
       }

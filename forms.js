@@ -238,11 +238,116 @@
     {
       id: 'nun',
       skinId: 'nun',
-      name: '特蕾拉修女',
-      title: '修女形态',
-      implemented: false,
+      name: '双生魔女',
+      title: '恶魔 / 火焰双形态',
+      implemented: true,
       accent: '#b8a2ff',
-      skills: null
+      baseAttack: {
+        fireRange: 132,
+        fireArc: 1.65,
+        fireDamageMult: 1
+      },
+      skills: {
+        q: {
+          slot: 'Q',
+          key: 'q',
+          code: 'KeyQ',
+          keyLabel: 'Q',
+          name: '三魔剑',
+          icon: 'assets/skills/nun-q.svg',
+          effect: 'nunSwords',
+          cooldown: 10,
+          duration: 6,
+          swordCount: 3,
+          swordOrbit: 76,
+          swordRange: 380,
+          attackInterval: 0.7,
+          weaponScale: 1,
+          stageDamage: 5,
+          desc: '召唤三把独立紫色魔剑环绕自身，自行索敌并攻击附近敌人。'
+        },
+        e: {
+          slot: 'E',
+          key: 'e',
+          code: 'KeyE',
+          keyLabel: 'E',
+          name: '深渊触手',
+          icon: 'assets/skills/nun-e.svg',
+          effect: 'nunTentacle',
+          cooldown: 14,
+          duration: 8,
+          attackRange: 230,
+          attackInterval: 1.25,
+          tauntRadius: 260,
+          tentacleHp: 240,
+          weaponScale: 1.2,
+          stageDamage: 8,
+          desc: '在当前位置召唤固定深渊触手，吸引附近敌人攻击并周期性砸击范围内目标。'
+        },
+        r: {
+          slot: 'R',
+          key: 'r',
+          code: 'Space',
+          keyLabel: '空格',
+          name: '魔剑轮舞',
+          icon: 'assets/skills/nun-r.svg',
+          effect: 'nunDemonUltimate',
+          cooldown: 50,
+          waves: 10,
+          waveInterval: 0.22,
+          bulletsPerWave: 18,
+          bulletSpeed: 270,
+          bulletLife: 2.2,
+          desc: '向四周连续发射 10 波紫色环形剑气；结束后自动切换为火焰形态。'
+        }
+      },
+      fireSkills: {
+        q: {
+          slot: 'Q',
+          key: 'q',
+          code: 'KeyQ',
+          keyLabel: 'Q',
+          name: '烈焰狂舞',
+          icon: 'assets/skills/nun-fire-q.svg',
+          effect: 'nunFireDance',
+          cooldown: 15,
+          duration: 5,
+          attackSpeedMultiplier: 2,
+          bonusDamage: 10,
+          bonusPerStage: 2,
+          desc: '5 秒内近战攻速翻倍，剑刃附加火焰附魔，每次攻击额外造成 10 + 2×关卡 伤害。'
+        },
+        e: {
+          slot: 'E',
+          key: 'e',
+          code: 'KeyE',
+          keyLabel: 'E',
+          name: '血焰收割',
+          icon: 'assets/skills/nun-fire-e.svg',
+          effect: 'nunBloodFlame',
+          cooldown: 25,
+          duration: 10,
+          healPerOrb: 2,
+          orbSpeed: 240,
+          desc: '10 秒内击杀敌人会在死亡位置生成红色生命球，吸收后恢复 2 HP。'
+        },
+        r: {
+          slot: 'R',
+          key: 'r',
+          code: 'Space',
+          keyLabel: '空格',
+          name: '三界巨剑',
+          icon: 'assets/skills/nun-fire-r.svg',
+          effect: 'nunFireUltimate',
+          cooldown: 50,
+          duration: 10,
+          swordCount: 3,
+          swordOrbit: 112,
+          stageDamage: 60,
+          hitInterval: 0.45,
+          desc: '召唤三把巨型火焰魔剑环绕自身旋转 10 秒，每次命中造成 60×关卡 伤害。'
+        }
+      }
     }
   ];
 
