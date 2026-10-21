@@ -916,11 +916,14 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-23';
-  const BULLET_VERSION = '20261020-23';
+  const AVATAR_VERSION = '20261020-24';
+  const BULLET_VERSION = '20261020-24';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
+  const brideWingsTexture = new Image();
+  brideWingsTexture.decoding = 'async';
+  brideWingsTexture.src = 'assets/effects/bride-wings.png?v=' + AVATAR_VERSION;
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -4311,11 +4314,11 @@
         r.active = 0;
         r.healTimer = 0;
         r.burnTimer = 0;
-        addRing(p.x, p.y, BRIDE_CONFIG.r.burnRadius * 0.8, '#ffc7dd', 0.6, 3);
+        addRing(p.x, p.y, BRIDE_CONFIG.r.burnRadius * 0.8, '#fffaf0', 0.6, 3);
         addToast('白翼收拢 · 圣焰消散', 'info', 1.4);
-        for (let i = 0; i < 20; i += 1) {
+        for (let i = 0; i < 14; i += 1) {
           const a = rand(0, TAU);
-          spawnParticle(p.x, p.y, Math.cos(a) * rand(60, 240), Math.sin(a) * rand(60, 240), rand(0.4, 1.0), rand(2, 6), Math.random() < 0.6 ? '#fff5fa' : '#ffc7dd', true);
+          spawnParticle(p.x, p.y, Math.cos(a) * rand(60, 230), Math.sin(a) * rand(60, 230), rand(0.4, 1.0), rand(2, 5), Math.random() < 0.72 ? '#fffaf0' : '#ffcf66', true);
         }
         refreshSkillBar(true);
       }
@@ -9545,8 +9548,8 @@
     const time = performance.now() * 0.001;
     ctx.save();
     const glow = ctx.createRadialGradient(p.x, p.y, p.r, p.x, p.y, radius);
-    glow.addColorStop(0, 'rgba(255,247,252,0.08)');
-    glow.addColorStop(0.55, 'rgba(255,214,231,0.1)');
+    glow.addColorStop(0, 'rgba(255,252,244,0.07)');
+    glow.addColorStop(0.55, 'rgba(255,239,210,0.08)');
     glow.addColorStop(1, 'rgba(255,207,102,0)');
     ctx.fillStyle = glow;
     ctx.beginPath();
@@ -9559,11 +9562,12 @@
     ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.stroke();
     ctx.setLineDash([]);
-    for (let i = 0; i < 10; i += 1) {
-      const a = time * 0.35 + (i / 10) * TAU;
-      const rr = radius * (0.45 + (i % 3) * 0.16);
-      ctx.fillStyle = i % 2 ? 'rgba(255,245,250,0.5)' : 'rgba(255,207,102,0.35)';
-      traceBrideHeart(p.x + Math.cos(a) * rr, p.y + Math.sin(a) * rr, 3 + (i % 2));
+    for (let i = 0; i < 6; i += 1) {
+      const a = time * 0.3 + (i / 6) * TAU;
+      const rr = radius * (0.5 + (i % 2) * 0.22);
+      ctx.fillStyle = i % 2 ? 'rgba(255,252,244,0.3)' : 'rgba(255,207,102,0.26)';
+      ctx.beginPath();
+      ctx.arc(p.x + Math.cos(a) * rr, p.y + Math.sin(a) * rr, 2.2, 0, TAU);
       ctx.fill();
     }
     ctx.restore();
@@ -9639,9 +9643,43 @@
     const r = p.skills.r;
     if (!r || r.active <= 0 || p.dead) return;
     const time = now * 0.001;
-    const flap = Math.sin(time * 2.2) * 8;
+    const open = clamp((BRIDE_CONFIG.r.duration - r.active) / 0.8, 0, 1);
+    const close = clamp(r.active / 0.6, 0, 1);
+    const grow = Math.min(open, close);
+    if (grow <= 0.02) return;
+
+    const wingW = Math.min(660, Math.max(340, view.w * 0.64));
+    const wingH = wingW * (730 / 1280);
+    const drawY = p.y - wingH * 0.48;
+
+    ctx.save();
+    ctx.globalAlpha = 0.16 * grow;
+    const glow = ctx.createRadialGradient(p.x, p.y, p.r, p.x, p.y, wingW * 0.55);
+    glow.addColorStop(0, 'rgba(255,252,244,0.55)');
+    glow.addColorStop(0.65, 'rgba(255,235,205,0.18)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, wingW * 0.55, wingH * 0.48, 0, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+
+    if (brideWingsTexture.complete && brideWingsTexture.naturalWidth > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.96 * grow;
+      ctx.translate(p.x, p.y);
+      ctx.scale(grow, grow);
+      // 透明独立翅膀素材：不包含人物、文字或背景；固定绘制在角色背后。
+      ctx.drawImage(brideWingsTexture, -wingW / 2, drawY - p.y, wingW, wingH);
+      ctx.restore();
+      return;
+    }
+
+    // 图片加载失败时的轻量矢量回退，保持技能不消失。
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = grow;
+    const flap = Math.sin(time * 2.2) * 8;
     for (let side = -1; side <= 1; side += 2) {
       for (let f = 0; f < 3; f += 1) {
         const baseX = p.x + side * (p.r + 2);
