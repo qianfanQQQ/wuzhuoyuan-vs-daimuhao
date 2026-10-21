@@ -121,9 +121,48 @@
       skinId: 'korean',
       name: '韩国欧巴',
       title: '潮流形态',
-      implemented: false,
+      implemented: true,
       accent: '#5de1ff',
-      skills: null
+      skills: {
+        q: {
+          slot: 'Q',
+          key: 'q',
+          code: 'KeyQ',
+          keyLabel: 'Q',
+          name: '双臂近战',
+          icon: 'assets/skills/korean-q.svg',
+          effect: 'koreanArms',
+          cooldown: 12,
+          duration: 6,
+          cooldownStartsOnCast: true,
+          desc: '召唤双臂近战 6 秒；3 秒后断一臂并提示“阿一古”，剩余手臂攻速翻倍。'
+        },
+        e: {
+          slot: 'E',
+          key: 'e',
+          code: 'KeyE',
+          keyLabel: 'E',
+          name: '自爆僵尸',
+          icon: 'assets/skills/korean-e.svg',
+          effect: 'koreanZombie',
+          cooldown: 5,
+          duration: 5.2,
+          explosionRadius: 105,
+          zombieSpeed: 145,
+          desc: '召唤自爆僵尸自动追踪敌人，进入范围后爆炸，造成关卡数 × 20 伤害。'
+        },
+        r: {
+          slot: 'R',
+          key: 'r',
+          code: 'Space',
+          keyLabel: '空格',
+          name: '天降巨大马头',
+          icon: 'assets/skills/korean-r.svg',
+          effect: 'koreanHorse',
+          requiredKills: 50,
+          desc: '每击杀 50 名敌人获得一次释放机会；巨大马头砸下，按关卡造成 600/1200/1500/2000 伤害。'
+        }
+      }
     },
     {
       id: 'bride',

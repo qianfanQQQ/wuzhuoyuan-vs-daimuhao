@@ -884,8 +884,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-17';
-  const BULLET_VERSION = '20261020-17';
+  const AVATAR_VERSION = '20261020-18';
+  const BULLET_VERSION = '20261020-18';
   const AVATAR_SCRIPT = document.currentScript || Array.prototype.find.call(document.scripts, function (script) {
     return /game\.js(?:[?#]|$)/.test(script.src);
   });
@@ -1197,7 +1197,15 @@
   function createSkillState(formId, kills) {
     return {
       formId: formId || DEFAULT_SKIN_ID,
-      q: { cooldown: 0, active: 0 },
+      q: {
+        cooldown: 0,
+        active: 0,
+        phase: 'idle',
+        elapsed: 0,
+        armCount: 0,
+        attackTimer: 0,
+        swing: 0
+      },
       e: { cooldown: 0, active: 0 },
       r: {
         baseKills: Math.max(0, Math.floor(Number(kills) || 0)),
@@ -1208,7 +1216,11 @@
         phase: 'idle',
         recordRemaining: 0,
         windowRemaining: 0,
-        snapshot: null
+        snapshot: null,
+        charges: 0,
+        killProgress: 0,
+        ult: null,
+        castLock: 0
       }
     };
   }
@@ -1216,6 +1228,11 @@
   function isEdgForm() {
     return !!game && game.player && game.player.formId === 'edg' &&
       !!window.CharacterForms && CharacterForms.hasSkills('edg');
+  }
+
+  function isKoreanForm() {
+    return !!game && game.player && game.player.formId === 'korean' &&
+      !!window.CharacterForms && CharacterForms.hasSkills('korean');
   }
 
   function isChampionForm() {
@@ -2778,6 +2795,7 @@
       companion: null,
       companionRecruitedThisRun: false,
       skillProjectiles: [],
+      koreanZombie: null,
       eventBoss: null,
       eventBossActive: false,
       eventBossDefeated: false,
@@ -3103,12 +3121,28 @@
     releaseDelayedPlayerBullets();
   }
 
+  function clearKoreanWorldState() {
+    if (!game) return;
+    game.koreanZombie = null;
+    if (game.player && game.player.skills) {
+      const skills = game.player.skills;
+      skills.q.phase = 'idle';
+      skills.q.elapsed = 0;
+      skills.q.armCount = 0;
+      skills.q.attackTimer = 0;
+      skills.q.swing = 0;
+      skills.r.ult = null;
+      skills.r.castLock = 0;
+    }
+  }
+
   function syncPlayerForm() {
     if (!game || !game.player) return;
     const nextFormId = getCurrentFormId();
     const p = game.player;
     if (p.formId === nextFormId) return;
     clearChampionWorldState();
+    clearKoreanWorldState();
     p.formId = nextFormId;
     p.skills = createSkillState(nextFormId, game.kills);
     // 切换形态时旧的技能效果必须立即失效，射速回到新形态的当前实际值。
@@ -3118,6 +3152,7 @@
   function resetPlayerSkillRuntime() {
     if (!game || !game.player || !game.player.skills) return;
     clearChampionWorldState();
+    clearKoreanWorldState();
     const skills = game.player.skills;
     skills.q.active = 0;
     skills.e.active = 0;
@@ -3149,6 +3184,15 @@
         addRing(p.x, p.y, p.r + 10, '#ffcf66', 0.42, 2);
       } else if (isEdgForm()) {
         p.shootCd = Math.max(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+      } else if (isKoreanForm()) {
+        q.phase = 'idle';
+        q.elapsed = 0;
+        q.armCount = 0;
+        q.attackTimer = 0;
+        q.swing = 0;
+        p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+        addToast('Q · 双臂收回', 'info', 1.2);
+        refreshSkillBar(true);
       }
     }
 
@@ -3180,6 +3224,8 @@
         }
       }
     }
+
+    if (isKoreanForm()) updateKoreanSkills(dt);
   }
 
   function castSkill(slot) {
@@ -3195,6 +3241,10 @@
 
     if (form.id === 'edg2026') {
       return castChampionSkill(slot, form, def);
+    }
+
+    if (form.id === 'korean') {
+      return castKoreanSkill(slot, form, def);
     }
 
     if (slot === 'q') {
@@ -3286,6 +3336,305 @@
     }
 
     return false;
+  }
+
+  function koreanHorseDamage(stage) {
+    const s = Math.max(1, Math.floor(Number(stage) || 1));
+    if (s <= 5) return 600;
+    if (s <= 10) return 1200;
+    if (s <= 15) return 1500;
+    return 2000;
+  }
+
+  function isKoreanMeleeActive() {
+    return isKoreanForm() && game.player.skills &&
+      game.player.skills.q.active > 0;
+  }
+
+  function damageKoreanTarget(target, damage, x, y) {
+    if (!target) return;
+    if (target === game.eventBoss) {
+      damageEventBoss(damage, { critical: false });
+    } else {
+      damageEnemy(target, damage, {
+        critical: false,
+        silent: true,
+        pushX: (target.x - x) * 1.2,
+        pushY: (target.y - y) * 1.2
+      });
+    }
+    addRing(x, y, 18, '#5de1ff', 0.24, 2);
+  }
+
+  function koreanMeleeAttack() {
+    if (!game || !game.player || game.player.dead) return;
+    const p = game.player;
+    const q = p.skills.q;
+    const target = findNearestEnemy(p.x, p.y, 120);
+    q.swing = 1;
+    if (!target) return;
+    p.aimAngle = Math.atan2(target.y - p.y, target.x - p.x);
+    const damage = getWeaponStats(p.weapon).damage * 2;
+    damageKoreanTarget(target, damage, p.x, p.y);
+    for (let i = 0; i < 8; i += 1) {
+      const angle = p.aimAngle + rand(-0.35, 0.35);
+      spawnParticle(
+        target.x,
+        target.y,
+        Math.cos(angle) * rand(35, 160),
+        Math.sin(angle) * rand(35, 160),
+        rand(0.15, 0.35),
+        rand(2, 4),
+        Math.random() < 0.5 ? '#5de1ff' : '#ffcf66',
+        true
+      );
+    }
+    audio.play('shoot_pistol');
+  }
+
+  function castKoreanSkill(slot, form, def) {
+    if (!game || !game.player || game.player.dead) return false;
+    const p = game.player;
+    const skills = p.skills;
+    if (!skills) return false;
+
+    if (slot === 'q') {
+      if (skills.q.active > 0 || skills.q.cooldown > 0) return false;
+      skills.q.active = def.duration;
+      skills.q.cooldown = def.cooldown;
+      skills.q.phase = 'two';
+      skills.q.elapsed = 0;
+      skills.q.armCount = 2;
+      skills.q.attackTimer = 0;
+      skills.q.swing = 0;
+      cancelReload();
+      p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+      addRing(p.x, p.y, p.r + 12, '#5de1ff', 0.5, 3);
+      addToast('Q · 双臂近战 · 3 秒后断臂', 'good', 1.8);
+      audio.play('skill');
+      pulseSkillSlot('q');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'e') {
+      if (skills.e.active > 0 || skills.e.cooldown > 0 || game.koreanZombie) return false;
+      skills.e.active = def.duration;
+      skills.e.cooldown = def.cooldown;
+      game.koreanZombie = {
+        x: p.x + Math.cos(p.aimAngle) * 24,
+        y: p.y + Math.sin(p.aimAngle) * 24,
+        target: null,
+        life: def.duration,
+        radius: def.explosionRadius,
+        speed: def.zombieSpeed,
+        dead: false
+      };
+      addRing(p.x, p.y, p.r + 9, '#9be36b', 0.42, 3);
+      addToast('E · 自爆僵尸已召唤', 'good', 1.5);
+      audio.play('skill');
+      pulseSkillSlot('e');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    if (slot === 'r') {
+      if (skills.r.charges < 1) {
+        addToast('R · 还需累计击杀 ' + (50 - skills.r.killProgress) + ' 名敌人', 'warn', 1.4);
+        audio.play('denied');
+        return false;
+      }
+      if (skills.r.castLock > 0 || skills.r.ult) return false;
+      skills.r.charges -= 1;
+      skills.r.castLock = 1.6;
+      const target = findNearestEnemy(p.x, p.y, 560);
+      const tx = target ? target.x : p.x + Math.cos(p.aimAngle) * 260;
+      const ty = target ? target.y : p.y + Math.sin(p.aimAngle) * 260;
+      skills.r.ult = {
+        x: clamp(tx, 80, MAP.w - 80),
+        y: clamp(ty, 80, MAP.h - 80),
+        time: 1.15,
+        maxTime: 1.15,
+        impacted: false,
+        hold: 0
+      };
+      addToast('R · 天降巨大马头！', 'good', 1.8);
+      audio.play('boss_warn');
+      pulseSkillSlot('r');
+      refreshSkillBar(true);
+      refreshStatsPanel(true);
+      return true;
+    }
+
+    return false;
+  }
+
+  function updateKoreanZombie(dt) {
+    const z = game.koreanZombie;
+    if (!z || z.dead) return;
+    z.life -= dt;
+    if (!z.target || z.target.dead || z.target.defeated) {
+      z.target = findNearestEnemy(z.x, z.y, 620);
+    }
+    if (z.target) {
+      const dx = z.target.x - z.x;
+      const dy = z.target.y - z.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      if (dist <= z.radius + z.target.r) {
+        explodeKoreanZombie(z);
+        return;
+      }
+      z.x += (dx / dist) * z.speed * dt;
+      z.y += (dy / dist) * z.speed * dt;
+      z.x = clamp(z.x, 30, MAP.w - 30);
+      z.y = clamp(z.y, 30, MAP.h - 30);
+    }
+    if (z.life <= 0) {
+      game.koreanZombie = null;
+      if (game.player.skills) game.player.skills.e.active = 0;
+    }
+  }
+
+  function explodeKoreanZombie(z) {
+    if (!game || !z || z.dead) return;
+    z.dead = true;
+    const damage = Math.max(1, Math.floor(Number(game.stage) || 1)) * 20;
+    addRing(z.x, z.y, z.radius, '#9be36b', 0.55, 4);
+    addRing(z.x, z.y, z.radius * 0.55, '#ffcf66', 0.35, 2);
+    addShake(9);
+    audio.play('explosion');
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead) continue;
+      if (Math.hypot(enemy.x - z.x, enemy.y - z.y) <= z.radius + enemy.r) {
+        damageEnemy(enemy, damage, {
+          critical: false,
+          silent: true,
+          pushX: (enemy.x - z.x) * 1.4,
+          pushY: (enemy.y - z.y) * 1.4
+        });
+      }
+    }
+    if (game.boss && !game.boss.dead &&
+        Math.hypot(game.boss.x - z.x, game.boss.y - z.y) <= z.radius + game.boss.r) {
+      damageEnemy(game.boss, damage, { critical: false, silent: true });
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated &&
+        Math.hypot(game.eventBoss.x - z.x, game.eventBoss.y - z.y) <= z.radius + game.eventBoss.r) {
+      damageEventBoss(damage, { critical: false });
+    }
+    for (let i = 0; i < 28; i += 1) {
+      const angle = rand(0, TAU);
+      const speed = rand(40, 260);
+      spawnParticle(
+        z.x, z.y,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        rand(0.2, 0.65), rand(2, 7),
+        Math.random() < 0.5 ? '#9be36b' : Math.random() < 0.5 ? '#ffcf66' : '#ff7048',
+        true
+      );
+    }
+    game.koreanZombie = null;
+    if (game.player.skills) game.player.skills.e.active = 0;
+  }
+
+  function impactKoreanHorse(ult) {
+    if (!game || !ult || ult.impacted) return;
+    ult.impacted = true;
+    const damage = koreanHorseDamage(game.stage);
+    addRing(ult.x, ult.y, 190, '#ffcf66', 0.75, 5);
+    addRing(ult.x, ult.y, 100, '#ff5f6d', 0.45, 3);
+    addShake(18);
+    audio.play('explosion');
+    for (let i = 0; i < game.enemies.length; i += 1) {
+      const enemy = game.enemies[i];
+      if (enemy.dead) continue;
+      if (Math.hypot(enemy.x - ult.x, enemy.y - ult.y) <= 180 + enemy.r) {
+        damageEnemy(enemy, damage, {
+          critical: false,
+          silent: true,
+          pushX: (enemy.x - ult.x) * 1.8,
+          pushY: (enemy.y - ult.y) * 1.8
+        });
+      }
+    }
+    if (game.boss && !game.boss.dead &&
+        Math.hypot(game.boss.x - ult.x, game.boss.y - ult.y) <= 180 + game.boss.r) {
+      damageEnemy(game.boss, damage, { critical: false, silent: true });
+    }
+    if (game.eventBossActive && game.eventBoss && !game.eventBoss.defeated &&
+        Math.hypot(game.eventBoss.x - ult.x, game.eventBoss.y - ult.y) <= 180 + game.eventBoss.r) {
+      damageEventBoss(damage, { critical: false });
+    }
+    for (let i = 0; i < 40; i += 1) {
+      const angle = rand(0, TAU);
+      const speed = rand(60, 380);
+      spawnParticle(
+        ult.x, ult.y,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        rand(0.25, 0.8), rand(3, 10),
+        Math.random() < 0.5 ? '#c98a52' : Math.random() < 0.5 ? '#ffcf66' : '#5de1ff',
+        true
+      );
+    }
+  }
+
+  function updateKoreanSkills(dt) {
+    const p = game.player;
+    const skills = p.skills;
+    const q = skills.q;
+    const e = skills.e;
+    const r = skills.r;
+
+    if (q.active > 0) {
+      q.elapsed += dt;
+      if (q.phase === 'two' && q.elapsed >= 3) {
+        q.phase = 'one';
+        q.armCount = 1;
+        q.attackTimer = 0;
+        addToast('阿一古！断了一条手臂，攻速翻倍', 'warn', 2.2);
+        addRing(p.x, p.y, p.r + 16, '#ff5f6d', 0.5, 3);
+        audio.play('boss_warn');
+      }
+      q.attackTimer -= dt;
+      if (q.attackTimer <= 0) {
+        q.attackTimer = q.phase === 'two' ? 0.55 : 0.275;
+        koreanMeleeAttack();
+      }
+      q.swing = Math.max(0, q.swing - dt * 4.5);
+      if (q.active <= 0) {
+        q.phase = 'idle';
+        q.elapsed = 0;
+        q.armCount = 0;
+        q.attackTimer = 0;
+        q.swing = 0;
+        p.shootCd = Math.min(p.shootCd, getWeaponStats(p.weapon).fireInterval);
+        addToast('Q · 双臂收回', 'info', 1.2);
+        refreshSkillBar(true);
+      }
+    } else if (q.phase !== 'idle') {
+      q.phase = 'idle';
+      q.armCount = 0;
+      q.elapsed = 0;
+      q.attackTimer = 0;
+      q.swing = 0;
+    }
+
+    if (game.koreanZombie) updateKoreanZombie(dt);
+    if (e.active <= 0 && game.koreanZombie) game.koreanZombie = null;
+
+    r.castLock = Math.max(0, r.castLock - dt);
+    if (r.ult) {
+      if (!r.ult.impacted) {
+        r.ult.time -= dt;
+        if (r.ult.time <= 0) impactKoreanHorse(r.ult);
+      } else {
+        r.ult.hold += dt;
+        if (r.ult.hold >= 0.4) r.ult = null;
+      }
+    }
   }
 
   function findSafeSkillPosition(originX, originY, radius, ignoreEnemy, avoidPlayer) {
@@ -3641,6 +3990,18 @@
 
   function onEnemyKilled() {
     if (!game || !game.player || game.player.dead) return;
+    if (isKoreanForm() && game.player.skills) {
+      const r = game.player.skills.r;
+      r.killProgress += 1;
+      if (r.killProgress >= 50) {
+        const gained = Math.floor(r.killProgress / 50);
+        r.charges += gained;
+        r.killProgress %= 50;
+        addToast('R · 巨大马头充能 +' + gained, 'good', 1.7);
+        audio.play('skill');
+      }
+      refreshSkillBar(false);
+    }
     if (!isEdgForm() || !isSkillActive('e')) return;
     const def = getFormSkill('e', 'edg');
     healPlayer(def ? def.healPerKill : 1, false);
@@ -3851,6 +4212,7 @@
     if (!game || state !== S.PLAYING) return;
     const p = game.player;
     if (p.dead || p.reloading) return;
+    if (isKoreanMeleeActive()) return;
     const key = p.weapon;
     const def = WEAPONS[key];
     const stats = getWeaponStats(key);
@@ -6862,11 +7224,13 @@
     drawBossTelegraphs();
     drawRewindEcho();
     drawCharacters(now);
+    drawKoreanZombie();
     drawBullets();
     drawSkillProjectiles();
     drawCompanionBullets();
     drawParticles();
     drawDamageNumbers();
+    drawKoreanUltimate(now);
 
     ctx.restore();
   }
@@ -8036,6 +8400,8 @@
       dashed: lowHp
     });
 
+    if (isKoreanForm()) drawKoreanArms(now);
+
     if (p.muzzle > 0) {
       const mx = p.x + Math.cos(p.aimAngle) * (p.r + 29);
       const my = renderY + Math.sin(p.aimAngle) * (p.r + 29);
@@ -8065,6 +8431,149 @@
     }
 
     ctx.restore();
+  }
+
+  function drawKoreanArms(now) {
+    if (!game || !game.player || !game.player.skills) return;
+    const p = game.player;
+    const q = p.skills.q;
+    if (!q || q.active <= 0 || q.armCount <= 0 || p.dead) return;
+    const target = findNearestEnemy(p.x, p.y, 130);
+    const angle = target ? Math.atan2(target.y - p.y, target.x - p.x) : p.aimAngle;
+    const perpX = -Math.sin(angle);
+    const perpY = Math.cos(angle);
+    const reach = 76 + Math.sin(now * 0.03) * 4 + (q.swing > 0 ? 16 : 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    for (let i = 0; i < q.armCount; i += 1) {
+      const side = i === 0 ? -1 : 1;
+      const shoulderX = p.x + perpX * side * 13 - Math.cos(angle) * 4;
+      const shoulderY = p.y + perpY * side * 13 - Math.sin(angle) * 4;
+      const handX = p.x + Math.cos(angle) * reach + perpX * side * 18;
+      const handY = p.y + Math.sin(angle) * reach + perpY * side * 18;
+      ctx.strokeStyle = 'rgba(8,13,21,0.72)';
+      ctx.lineWidth = 23;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, shoulderY);
+      ctx.lineTo(handX, handY);
+      ctx.stroke();
+      ctx.strokeStyle = i === 0 ? '#d99a70' : '#f0b88c';
+      ctx.lineWidth = 17;
+      ctx.beginPath();
+      ctx.moveTo(shoulderX, shoulderY);
+      ctx.lineTo(handX, handY);
+      ctx.stroke();
+      ctx.fillStyle = '#ffe0bd';
+      ctx.beginPath();
+      ctx.arc(handX, handY, 14, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#7b4c35';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#5de1ff';
+      ctx.beginPath();
+      ctx.arc(handX, handY, 4, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawKoreanZombie() {
+    if (!game || !game.koreanZombie) return;
+    const z = game.koreanZombie;
+    const t = performance.now() * 0.001;
+    const bob = Math.sin(t * 12) * 2;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(z.x, z.y + 22, 20, 8, 0, 0, TAU);
+    ctx.fill();
+    ctx.translate(z.x, z.y + bob);
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#3d6f2d';
+    ctx.fillRect(-11, 0, 22, 24);
+    ctx.fillStyle = '#9be36b';
+    ctx.fillRect(-8, -18, 16, 16);
+    ctx.fillStyle = '#101010';
+    ctx.fillRect(-5, -13, 4, 4);
+    ctx.fillRect(2, -13, 4, 4);
+    ctx.fillRect(-5, -5, 10, 2);
+    ctx.fillStyle = '#9be36b';
+    ctx.fillRect(-18, 1, 7, 6);
+    ctx.fillRect(11, 1, 7, 6);
+    ctx.fillStyle = '#385d2b';
+    ctx.fillRect(-8, 24, 6, 7);
+    ctx.fillRect(2, 24, 6, 7);
+    ctx.fillStyle = '#eaffd3';
+    ctx.font = '700 8px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('僵尸', 0, -25);
+    ctx.restore();
+  }
+
+  function drawKoreanUltimate(now) {
+    if (!game || !game.player || !game.player.skills) return;
+    const r = game.player.skills.r;
+    const ult = r && r.ult;
+    if (!ult) return;
+    const progress = ult.impacted ? 1 : 1 - clamp(ult.time / ult.maxTime, 0, 1);
+    const fallOffset = (1 - progress) * 420;
+    const drawX = ult.x;
+    const drawY = ult.y - fallOffset;
+    const scale = 1 + progress * 0.25;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,' + (0.16 + progress * 0.24) + ')';
+    ctx.beginPath();
+    ctx.ellipse(ult.x, ult.y + 18, 66 + progress * 70, 18 + progress * 20, 0, 0, TAU);
+    ctx.fill();
+    ctx.translate(drawX, drawY);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = ult.impacted ? Math.max(0, 1 - ult.hold / 0.4) : 0.95;
+    ctx.fillStyle = '#7a4a2c';
+    ctx.beginPath();
+    ctx.moveTo(-42, -8);
+    ctx.quadraticCurveTo(-38, -76, 0, -92);
+    ctx.quadraticCurveTo(38, -76, 42, -8);
+    ctx.lineTo(28, 28);
+    ctx.quadraticCurveTo(0, 42, -28, 28);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#a76b3e';
+    ctx.beginPath();
+    ctx.moveTo(-32, -26);
+    ctx.quadraticCurveTo(0, -70, 32, -26);
+    ctx.lineTo(22, 22);
+    ctx.quadraticCurveTo(0, 32, -22, 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#1a0f0a';
+    ctx.beginPath();
+    ctx.arc(-17, -30, 7, 0, TAU);
+    ctx.arc(17, -30, 7, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#ffcf66';
+    ctx.beginPath();
+    ctx.arc(-17, -30, 3, 0, TAU);
+    ctx.arc(17, -30, 3, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = '#4c2a1a';
+    ctx.fillRect(-24, 6, 48, 8);
+    ctx.fillStyle = '#e8d7c3';
+    ctx.fillRect(-20, 14, 8, 7);
+    ctx.fillRect(12, 14, 8, 7);
+    ctx.fillStyle = '#5de1ff';
+    ctx.font = '900 10px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('马头', 0, -108);
+    ctx.restore();
+    if (ult.impacted && ult.hold < 0.16) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(255,207,102,' + (0.24 * (1 - ult.hold / 0.16)) + ')';
+      ctx.fillRect(game.camera.x, game.camera.y, view.w, view.h);
+      ctx.restore();
+    }
   }
 
   function drawPlayerWeapon(p, renderY) {
@@ -9468,6 +9977,22 @@
           mask.style.height = '0%';
           timer.textContent = '';
           button.title = '十六强重开 · 就绪';
+        }
+        return;
+      }
+
+      if (form.id === 'korean') {
+        const kr = stateForSlot;
+        if (kr.charges > 0) {
+          button.classList.add('is-r-ready');
+          mask.style.height = '0%';
+          timer.textContent = '×' + kr.charges;
+          button.title = '天降巨大马头 · 可释放 ' + kr.charges + ' 次';
+        } else {
+          button.classList.add('is-r-charging');
+          mask.style.height = ((1 - kr.killProgress / 50) * 100).toFixed(1) + '%';
+          timer.textContent = kr.killProgress + '/50';
+          button.title = '天降巨大马头 · 击杀充能 ' + kr.killProgress + '/50';
         }
         return;
       }
