@@ -4703,3 +4703,47 @@ body.touch .skill-lock-note {
   .event-panel .event-choice-icon { width: 26px !important; height: 26px !important; }
   .event-panel .event-footer { margin-top: 6px !important; }
 }
+
+/* 第10关隐藏Boss出场视频 */
+.boss-video-screen {
+  background: #000 !important;
+  z-index: 80;
+  padding: 0 !important;
+}
+.boss-video-panel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+}
+.boss-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.boss-video-title {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.82);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 2px 12px #000;
+  pointer-events: none;
+}
+.boss-video-skip {
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 2;
+}
+@media (max-width: 900px) {
+  .boss-video-title { font-size: 9px; }
+  .boss-video-skip { right: 12px; bottom: 12px; }
+}

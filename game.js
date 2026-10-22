@@ -159,6 +159,7 @@
     PAUSED: 'paused',
     UPGRADE: 'upgrade',
     EVENT: 'event',
+    CUTSCENE: 'cutscene',
     DYING: 'dying',
     GAMEOVER: 'gameover',
     VICTORY: 'victory'
@@ -977,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-32';
-  const BULLET_VERSION = '20261020-32';
+  const AVATAR_VERSION = '20261020-33';
+  const BULLET_VERSION = '20261020-33';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -1002,6 +1003,14 @@
     image.src = 'assets/effects/' + entry[1] + '?v=' + AVATAR_VERSION;
     nunTextures[entry[0]] = image;
   });
+
+  const blackAdiaoTexture = new Image();
+  blackAdiaoTexture.decoding = 'async';
+  blackAdiaoTexture.src = 'assets/events/black-adiao.png?v=' + AVATAR_VERSION;
+
+  const blackAdiaoWeaponTexture = new Image();
+  blackAdiaoWeaponTexture.decoding = 'async';
+  blackAdiaoWeaponTexture.src = 'assets/events/black-adiao-weapon.png?v=' + AVATAR_VERSION;
 
   function nunTextureReady(key) {
     const image = nunTextures[key];
@@ -1662,6 +1671,9 @@
     eventCoinNote: $('eventCoinNote'),
     eventRewardCards: $('eventRewardCards'),
     eventRewardFooter: $('eventRewardFooter'),
+    blackAdiaoVideoScreen: $('blackAdiaoVideoScreen'),
+    blackAdiaoVideo: $('blackAdiaoVideo'),
+    blackAdiaoSkipBtn: $('blackAdiaoSkipBtn'),
     fireBtn: $('fireBtn'),
     reloadBtn: $('reloadBtn'),
     dashBtn: $('dashBtn'),
@@ -1682,6 +1694,7 @@
     inventory: $('inventoryScreen'),
     event: $('eventScreen'),
     eventReward: $('eventRewardScreen'),
+    blackAdiaoVideo: $('blackAdiaoVideoScreen'),
     victory: $('victoryScreen')
   };
 
@@ -1773,6 +1786,7 @@
       nextState === S.PAUSED ||
       nextState === S.UPGRADE ||
       nextState === S.EVENT ||
+      nextState === S.CUTSCENE ||
       nextState === S.DYING ||
       nextState === S.VICTORY
     );
@@ -3492,6 +3506,10 @@
       banner: null,
       boss: null,
       bossActive: false,
+      blackAdiaoTriggered: false,
+      blackAdiaoDefeated: false,
+      blackAdiaoRewardGranted: false,
+      blackAdiaoVideoActive: false,
       nextBossAt: 42,
       spawnTimer: 1.2,
       tutorial: 7.2,
@@ -6795,7 +6813,8 @@
       }
 
       if (enemy.type === 'boss') {
-        updateBoss(enemy, dt);
+        if (enemy.blackAdiao) updateBlackAdiaoBoss(enemy, dt);
+        else updateBoss(enemy, dt);
       } else {
         updateRegularEnemy(enemy, dt);
       }
@@ -7107,6 +7126,149 @@
       }
       addToast('BOSS 召唤了追兵！', 'warn', 2.2);
       audio.play('boss_shoot');
+    }
+  }
+
+  function updateBlackAdiaoBoss(boss, dt) {
+    const p = game.player;
+    const dx = p.x - boss.x;
+    const dy = p.y - boss.y;
+    const dist = Math.max(0.001, Math.hypot(dx, dy));
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    boss.spawnT = Math.max(0, boss.spawnT - dt);
+    boss.hitFlash = Math.max(0, boss.hitFlash - dt);
+    boss.castFlash = Math.max(0, boss.castFlash - dt);
+    boss.attackFlash = Math.max(0, boss.attackFlash - dt);
+    boss.meleeCd = Math.max(0, boss.meleeCd - dt);
+
+    if (!boss.enraged && boss.hp <= boss.maxHp * 0.5) {
+      boss.enraged = true;
+      boss.damageMult = 1.35;
+      boss.speed *= 1.12;
+      setBanner('黑色阿吊 · 暴走', '弹幕密度与重击速度提升', 'boss', 2.4);
+      addShake(14);
+      audio.play('boss_warn');
+    }
+
+    // 近战阶段：前摇 -> 砸下 -> 收回；前摇期间不发射远程弹幕。
+    if (boss.meleeState !== 'idle') {
+      boss.meleeTime -= dt;
+      if (boss.meleeState === 'windup' && boss.meleeTime <= 0) {
+        boss.meleeState = 'slam';
+        boss.meleeTime = 0.24;
+        boss.attackFlash = 0.3;
+        addShake(12);
+        audio.play('explosion');
+        if (!p.dead && Math.hypot(p.x - boss.meleeX, p.y - boss.meleeY) <= boss.meleeRadius + p.r) {
+          damagePlayer(boss.meleeDamage * boss.damageMult, boss.meleeX, boss.meleeY);
+        }
+        addRing(boss.meleeX, boss.meleeY, boss.meleeRadius, '#ff4f6d', 0.45, 5);
+        for (let i = 0; i < 16; i += 1) {
+          const a = rand(0, TAU);
+          spawnParticle(boss.meleeX, boss.meleeY, Math.cos(a) * rand(60, 220), Math.sin(a) * rand(60, 220), rand(0.2, 0.5), rand(2, 6), '#d9c7ff', true);
+        }
+      } else if (boss.meleeState === 'slam' && boss.meleeTime <= 0) {
+        boss.meleeState = 'recover';
+        boss.meleeTime = 0.42;
+      } else if (boss.meleeState === 'recover' && boss.meleeTime <= 0) {
+        boss.meleeState = 'idle';
+        boss.meleeCd = boss.enraged ? 1.15 : 1.65;
+      }
+      return;
+    }
+
+    // 中距离切换：过远追击，贴身时准备重击，中距离保持火力平台。
+    if (dist > 300) {
+      boss.x += dirX * boss.speed * dt;
+      boss.y += dirY * boss.speed * dt;
+    } else if (dist < 155) {
+      boss.x -= dirX * boss.speed * 0.55 * dt;
+      boss.y -= dirY * boss.speed * 0.55 * dt;
+    } else {
+      boss.strafeTimer -= dt;
+      if (boss.strafeTimer <= 0) {
+        boss.strafeTimer = rand(0.8, 1.6);
+        boss.strafeDir *= -1;
+      }
+      boss.x += (-dirY * boss.strafeDir * 42 + dirX * 18) * dt;
+      boss.y += (dirX * boss.strafeDir * 42 + dirY * 18) * dt;
+    }
+    boss.x += boss.pushX * dt;
+    boss.y += boss.pushY * dt;
+    boss.pushX *= Math.exp(-dt * 7);
+    boss.pushY *= Math.exp(-dt * 7);
+    clampToMap(boss);
+
+    if (boss.spawnT > 0 || boss.dead) return;
+
+    if (dist < 215 && boss.meleeCd <= 0) {
+      boss.meleeState = 'windup';
+      boss.meleeTime = boss.enraged ? 0.55 : 0.7;
+      boss.meleeX = p.x;
+      boss.meleeY = p.y;
+      boss.meleeRadius = 104;
+      boss.castFlash = 0.35;
+      addToast('黑色阿吊 · 重击预警', 'warn', 0.8);
+      return;
+    }
+
+    const canShoot = game.enemyBullets.length < MAX_ENEMY_BULLETS - 20;
+    boss.ringCd -= dt;
+    boss.fanCd -= dt;
+    boss.spiralCd -= dt;
+    boss.comboCD -= dt;
+    if (!canShoot) return;
+
+    if (boss.spiralCd <= 0) {
+      boss.spiralCd = boss.enraged ? 0.11 : 0.16;
+      boss.spiralAngle += boss.enraged ? 0.24 : 0.18;
+      for (let i = 0; i < 2; i += 1) {
+        const a = boss.spiralAngle + i * Math.PI;
+        spawnEnemyBullet(boss.x, boss.y, a, boss.enraged ? 285 : 245, 11 * boss.damageMult, 6, '#d7c2ff');
+      }
+    }
+    if (boss.ringCd <= 0) {
+      boss.ringCd = boss.enraged ? 0.72 : 0.95;
+      const count = boss.enraged ? 26 : 20;
+      const offset = rand(0, TAU);
+      for (let i = 0; i < count; i += 1) {
+        const a = offset + (i / count) * TAU;
+        spawnEnemyBullet(boss.x, boss.y, a, boss.enraged ? 250 : 220, 12 * boss.damageMult, 6.5, '#d7c2ff');
+      }
+      if (boss.enraged) {
+        for (let i = 0; i < 14; i += 1) {
+          const a = offset + Math.PI / 14 + (i / 14) * TAU;
+          spawnEnemyBullet(boss.x, boss.y, a, 170, 9 * boss.damageMult, 5, '#8d5bff');
+        }
+      }
+      addRing(boss.x, boss.y, boss.r, '#8d5bff', 0.3, 3);
+    }
+    if (boss.fanCd <= 0) {
+      boss.fanCd = boss.enraged ? 0.9 : 1.25;
+      const base = Math.atan2(dy, dx);
+      const count = boss.enraged ? 20 : 15;
+      const spread = boss.enraged ? 1.5 : 1.2;
+      for (let i = 0; i < count; i += 1) {
+        const a = base - spread * 0.5 + (i / Math.max(1, count - 1)) * spread;
+        spawnEnemyBullet(boss.x, boss.y, a, boss.enraged ? 300 : 255, 13 * boss.damageMult, 6, '#f0b7ff');
+      }
+    }
+    if (boss.comboCD <= 0) {
+      boss.comboCD = boss.enraged ? 2.0 : 3.0;
+      const base = Math.atan2(dy, dx);
+      for (let i = 0; i < 4; i += 1) {
+        const a = base + i * Math.PI * 0.5;
+        spawnEnemyBullet(boss.x, boss.y, a, 210, 10 * boss.damageMult, 5, '#d7c2ff');
+      }
+      for (let i = 0; i < 16; i += 1) {
+        const a = rand(0, TAU);
+        spawnEnemyBullet(boss.x, boss.y, a, rand(150, 240), 8 * boss.damageMult, 4.5, '#8d5bff');
+      }
+    }
+    if (boss.rangedCd <= 0) {
+      boss.rangedCd = boss.enraged ? 0.35 : 0.5;
+      boss.attackFlash = 0.18;
     }
   }
 
@@ -7954,6 +8116,131 @@
     }
   }
 
+  function beginBlackAdiaoVideo() {
+    if (!game || !el.blackAdiaoVideo) return false;
+    if (game.blackAdiaoVideoActive || game.blackAdiaoTriggered) return false;
+    game.blackAdiaoVideoActive = true;
+    game.blackAdiaoTriggered = true;
+    game.boss = null;
+    game.bossActive = false;
+    game.enemyBullets = [];
+    game.spawnTimer = 9999;
+    game.stageState = 'boss-video';
+    game.player.invuln = Math.max(game.player.invuln, 1.2);
+    setState(S.CUTSCENE);
+    clearInput();
+    hideScreens();
+    showScreen('blackAdiaoVideo');
+    el.blackAdiaoVideo.currentTime = 0;
+    el.blackAdiaoVideo.src = 'assets/video/black-adiao.mp4?v=' + AVATAR_VERSION;
+    el.blackAdiaoVideo.load();
+    const playPromise = el.blackAdiaoVideo.play();
+    if (playPromise && typeof playPromise.catch === 'function') {
+      playPromise.catch(function () {
+        // 移动端自动播放被拒时保留跳过按钮，不直接进入战斗。
+        addToast('视频无法自动播放，可点击“跳过视频”继续', 'warn', 2.8);
+      });
+    }
+    lastFrameTime = performance.now();
+    return true;
+  }
+
+  function finishBlackAdiaoVideo() {
+    if (!game || !game.blackAdiaoVideoActive) return;
+    game.blackAdiaoVideoActive = false;
+    if (el.blackAdiaoVideo) {
+      try { el.blackAdiaoVideo.pause(); } catch (error) { /* ignore */ }
+    }
+    hideScreens();
+    setState(S.PLAYING);
+    clearInput();
+    game.stageState = 'boss';
+    spawnBlackAdiao();
+    lastFrameTime = performance.now();
+  }
+
+  function spawnBlackAdiao() {
+    if (!game || game.player.dead || game.blackAdiaoDefeated) return null;
+    if (game.boss && game.boss.blackAdiao && !game.boss.dead) return game.boss;
+    const hp = 12000;
+    const x = clamp(game.player.x + (Math.random() < 0.5 ? -1 : 1) * 280, 80, MAP.w - 80);
+    const y = clamp(game.player.y - 160, 80, MAP.h - 80);
+    const boss = {
+      uid: ++game.enemyUid,
+      type: 'boss',
+      blackAdiao: true,
+      name: '黑色阿吊',
+      title: '第10关隐藏后续 Boss',
+      x: x,
+      y: y,
+      r: 58,
+      hp: hp,
+      maxHp: hp,
+      speed: 118,
+      damage: 24,
+      xpValue: 120,
+      scoreValue: 8000,
+      ring: '#8d5bff',
+      theme: 'default',
+      themeAccent: '#d9c7ff',
+      themeBullet: '#d7c2ff',
+      themeRage: '#ff4f6d',
+      tier: 4,
+      damageMult: 1.2,
+      cooldownMult: 0.72,
+      countBonus: 6,
+      patternIndex: 0,
+      patternCd: 1.1,
+      spiral: null,
+      zones: [],
+      patternFlash: 0,
+      hitFlash: 0,
+      attackCd: 0.7,
+      attackFlash: 0,
+      spawnT: 0.6,
+      lungeCd: 2,
+      lungeTime: 0,
+      wobble: rand(0, TAU),
+      pushX: 0,
+      pushY: 0,
+      dead: false,
+      bossHandled: false,
+      phase: 1,
+      enraged: false,
+      specialCd: 1.2,
+      volleyCd: 1.6,
+      summoned: false,
+      castFlash: 0,
+      strafeDir: Math.random() < 0.5 ? -1 : 1,
+      strafeTimer: rand(1.2, 2.4),
+      rangedMode: true,
+      rangedCd: 0.85,
+      ringCd: 0.6,
+      fanCd: 1.0,
+      spiralCd: 0.15,
+      spiralAngle: rand(0, TAU),
+      comboCD: 2.8,
+      meleeState: 'idle',
+      meleeTime: 0,
+      meleeCd: 1.3,
+      meleeX: 0,
+      meleeY: 0,
+      meleeRadius: 104,
+      meleeDamage: 48
+    };
+    game.enemies.push(boss);
+    game.boss = boss;
+    game.bossActive = true;
+    game.stageState = 'boss';
+    game.spawnTimer = 9999;
+    setBanner('隐藏后续 Boss · 黑色阿吊', '高密度弹幕与巨物重击 · 击败后获得生命翻倍', 'boss', 3.2);
+    addToast('黑色阿吊已降临', 'warn', 3);
+    addShake(20);
+    audio.play('boss_warn');
+    addRing(x, y, 55, '#8d5bff', 1.2, 5);
+    return boss;
+  }
+
   function handleBossDeath(boss) {
     if (!game || boss.bossHandled) return;
     boss.bossHandled = true;
@@ -7968,9 +8255,31 @@
     addToast('BOSS 额外奖励已结算', 'good', 3);
     addRing(boss.x, boss.y, boss.r, '#ffcf66', 1.1, 5);
 
+    if (boss.blackAdiao) {
+      if (!game.blackAdiaoRewardGranted) {
+        game.blackAdiaoRewardGranted = true;
+        const p = game.player;
+        p.maxHp = Math.round(p.maxHp * 2);
+        p.hp = Math.min(p.maxHp, p.hp * 2);
+        addToast('黑色阿吊已击败 · 最大生命翻倍', 'good', 3.2);
+        addRing(p.x, p.y, p.r + 14, '#ffcf66', 0.9, 4);
+      }
+      game.blackAdiaoDefeated = true;
+      setBanner('黑色阿吊 · 击破', '最大生命值翻倍 · 隐藏路线完成', 'reward', 3.2);
+      if (game.mode === 'stage') {
+        game.stageState = 'transition';
+        game.stageTransition = 2.8;
+        game.score += 1200 * game.stage;
+      }
+      return;
+    }
+
     if (game.mode === 'survival') {
       game.nextBossAt = game.time + 58;
     } else if (game.mode === 'stage') {
+      if (game.stage === 10 && !game.blackAdiaoTriggered) {
+        if (beginBlackAdiaoVideo()) return;
+      }
       game.stageState = 'transition';
       game.stageTransition = 2.3;
       game.score += 300 * game.stage;
@@ -8130,6 +8439,18 @@
     p.dead = true;
     p.hp = 0;
     p.dashTime = 0;
+    if (game.blackAdiaoVideoActive) {
+      game.blackAdiaoVideoActive = false;
+      if (el.blackAdiaoVideo) {
+        try { el.blackAdiaoVideo.pause(); } catch (error) { /* ignore */ }
+      }
+      hideScreens();
+    }
+    if (game.boss && game.boss.blackAdiao) {
+      game.boss = null;
+      game.bossActive = false;
+      game.enemyBullets = [];
+    }
     if (game.shenlin) {
       stopShenlinChallenge();
       if (randomEventManager) randomEventManager.finish();
@@ -10025,20 +10346,67 @@
       ctx.restore();
     }
 
-    // 普通敌人、精英敌人和 BOSS 均使用 assets/enemy.png。
-    drawCircularAvatar(
-      avatars.enemy,
-      enemy.x,
-      enemy.y,
-      radius,
-      enemy.type === 'boss'
-        ? (enemy.enraged ? (enemy.themeRage || '#ff5a3c') : (enemy.ring || '#ff4f6d'))
-        : isCharger ? '#ff4b4b' : isRanged ? '#ffb35e' : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
-      {
-        ringWidth: enemy.type === 'boss' ? 3.5 : (isRanged || enemy.type === 'elite') ? 2.4 : 1.8,
-        dashed: enemy.type === 'elite'
+    if (enemy.blackAdiao && blackAdiaoTexture.complete && blackAdiaoTexture.naturalWidth > 0) {
+      const h = 158;
+      const w = h * (blackAdiaoTexture.naturalWidth / blackAdiaoTexture.naturalHeight);
+      ctx.save();
+      ctx.globalAlpha = 0.98;
+      ctx.drawImage(blackAdiaoTexture, enemy.x - w * 0.5, enemy.y - h * 0.5, w, h);
+      ctx.restore();
+    } else {
+      // 普通敌人、精英敌人和 BOSS 均使用 assets/enemy.png。
+      drawCircularAvatar(
+        avatars.enemy,
+        enemy.x,
+        enemy.y,
+        radius,
+        enemy.type === 'boss'
+          ? (enemy.enraged ? (enemy.themeRage || '#ff5a3c') : (enemy.ring || '#ff4f6d'))
+          : isCharger ? '#ff4b4b' : isRanged ? '#ffb35e' : enemy.type === 'elite' ? '#ffb35e' : '#ff6b7d',
+        {
+          ringWidth: enemy.type === 'boss' ? 3.5 : (isRanged || enemy.type === 'elite') ? 2.4 : 1.8,
+          dashed: enemy.type === 'elite'
+        }
+      );
+    }
+
+    if (enemy.blackAdiao && enemy.meleeState !== 'idle') {
+      const warnX = enemy.meleeX;
+      const warnY = enemy.meleeY;
+      const warnPulse = 0.5 + Math.sin(performance.now() * 0.014) * 0.2;
+      const warnRadius = enemy.meleeRadius + game.player.r;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 7]);
+      ctx.globalAlpha = warnPulse;
+      ctx.beginPath();
+      ctx.arc(warnX, warnY, warnRadius, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.2;
+      ctx.fillStyle = '#ff4f6d';
+      ctx.beginPath();
+      ctx.arc(warnX, warnY, warnRadius, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      if (enemy.meleeState === 'windup' && blackAdiaoWeaponTexture.complete && blackAdiaoWeaponTexture.naturalWidth > 0) {
+        const wh = 86;
+        const ww = wh * (blackAdiaoWeaponTexture.naturalWidth / blackAdiaoWeaponTexture.naturalHeight);
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(blackAdiaoWeaponTexture, warnX - ww * 0.5, warnY - wh - 18 + Math.sin(performance.now() * 0.02) * 4, ww, wh);
+        ctx.restore();
+      } else if (enemy.meleeState === 'slam' && blackAdiaoWeaponTexture.complete && blackAdiaoWeaponTexture.naturalWidth > 0) {
+        const wh = 132;
+        const ww = wh * (blackAdiaoWeaponTexture.naturalWidth / blackAdiaoWeaponTexture.naturalHeight);
+        ctx.save();
+        ctx.globalAlpha = 0.95;
+        ctx.drawImage(blackAdiaoWeaponTexture, warnX - ww * 0.5, warnY - wh * 0.55, ww, wh);
+        ctx.restore();
       }
-    );
+    }
 
     if (isFreezeActive()) {
       ctx.save();
@@ -13272,6 +13640,11 @@
     el.pauseMenuBtn.addEventListener('click', returnToMenu);
     el.restartBtn.addEventListener('click', restartGame);
     el.gameOverMenuBtn.addEventListener('click', returnToMenu);
+    if (el.blackAdiaoVideo) {
+      el.blackAdiaoVideo.addEventListener('ended', finishBlackAdiaoVideo);
+      el.blackAdiaoVideo.addEventListener('error', finishBlackAdiaoVideo);
+    }
+    if (el.blackAdiaoSkipBtn) el.blackAdiaoSkipBtn.addEventListener('click', finishBlackAdiaoVideo);
     if (el.victoryRestartBtn) el.victoryRestartBtn.addEventListener('click', restartGame);
     if (el.victoryMenuBtn) el.victoryMenuBtn.addEventListener('click', returnToMenu);
 
