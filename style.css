@@ -4657,3 +4657,49 @@ body.touch .skill-lock-note {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* 神临事件：复用随机事件窗口，仅隐藏吴朝阳好感度模块。 */
+.event-panel.is-shenlin .event-affinity,
+.event-panel.is-shenlin .event-hearts { display: none; }
+.event-panel.is-shenlin .event-portrait-frame img { object-position: center 18%; }
+
+
+/* 神临/随机事件横屏适配：保证立绘与对话同时可见，不被超高立绘挤出视口。 */
+@media (orientation: landscape) and (max-height: 560px) {
+  .event-screen {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 6px 10px !important;
+  }
+  .event-panel {
+    grid-template-columns: 176px minmax(0, 1fr) !important;
+    width: calc(100vw - 20px) !important;
+    height: calc(100dvh - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+    overflow: hidden !important;
+  }
+  .event-panel .event-portrait-col {
+    padding: 7px !important;
+    min-height: 0 !important;
+    border-right: 1px solid rgba(125, 163, 184, 0.13) !important;
+    border-bottom: 0 !important;
+  }
+  .event-panel .event-portrait-frame {
+    flex: 1 !important;
+    min-height: 0 !important;
+    aspect-ratio: auto !important;
+  }
+  .event-panel .event-copy {
+    min-height: 0 !important;
+    padding: 10px 14px !important;
+    overflow-y: auto !important;
+  }
+  .event-panel .event-speaker h2 { font-size: 23px !important; }
+  .event-panel .event-text { min-height: 0 !important; margin-bottom: 8px !important; font-size: 11px !important; line-height: 1.5 !important; }
+  .event-panel .event-topline { margin-bottom: 6px !important; }
+  .event-panel .event-choice { min-height: 44px !important; padding: 7px 9px !important; }
+  .event-panel .event-choice-copy strong { font-size: 11px !important; }
+  .event-panel .event-choice-copy small { font-size: 8px !important; }
+  .event-panel .event-choice-icon { width: 26px !important; height: 26px !important; }
+  .event-panel .event-footer { margin-top: 6px !important; }
+}

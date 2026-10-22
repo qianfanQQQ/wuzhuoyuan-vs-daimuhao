@@ -153,10 +153,38 @@
     }
   };
 
+  const SHENLIN_EVENT = {
+    id: 'shen-lin',
+    title: '神临',
+    trigger: 'stage-enter',
+    stage: 8,
+    chance: 0.8,
+    portrait: 'huoda-portrait.jpg',
+    avatar: 'huoda-portrait.jpg',
+    personName: '霍达',
+    role: '第八关的考验者',
+    intro: {
+      speaker: '霍达',
+      role: '第八关的考验者',
+      text: '孩子，你是否接受挑战'
+    },
+    choices: {
+      accept: {
+        label: '会赢的',
+        hint: '进入 12 秒极限激光雨'
+      },
+      leave: {
+        label: '离开',
+        hint: '放弃本次挑战'
+      }
+    }
+  };
+
   window.RandomEventSystem = {
     RandomEventManager: RandomEventManager,
     events: {
-      WUCHAOYANG: WUCHAOYANG_EVENT
+      WUCHAOYANG: WUCHAOYANG_EVENT,
+      SHENLIN: SHENLIN_EVENT
     }
   };
 })();

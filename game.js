@@ -169,7 +169,7 @@
     stage: '关卡挑战'
   };
 
-  const WEAPON_ORDER = ['pistol', 'smg', 'shotgun', 'sniper', 'rocket'];
+  const WEAPON_ORDER = ['pistol', 'smg', 'shotgun', 'sniper', 'rocket', 'laser'];
   // 火箭筒强化只在这里乘一次：直击基础伤害和爆炸基础伤害同时变为原来的 3 倍。
   const ROCKET_DAMAGE_MULTIPLIER = 3;
 
@@ -280,6 +280,29 @@
       splashDamage: 105 * ROCKET_DAMAGE_MULTIPLIER,
       splashRadius: 152,
       desc: '命中后爆炸，对范围内敌人造成伤害。'
+    },
+    laser: {
+      key: 6,
+      name: '神罚激光',
+      short: '神罚',
+      damage: 60,
+      fireInterval: 0.25,
+      mag: 0,
+      reloadTime: 0,
+      bulletSpeed: 2600,
+      spread: 0,
+      pellets: 1,
+      pierce: 1,
+      range: 1600,
+      bulletRadius: 3.6,
+      color: '#e8fbff',
+      glow: '#77e8ff',
+      shake: 2.3,
+      unlockLevel: 8,
+      sound: 'shoot_sniper',
+      noReload: true,
+      laser: true,
+      desc: '神临资格武器。单发 60 伤害，每秒 4 次，无需换弹。'
     }
   };
 
@@ -587,7 +610,8 @@
     wuchaoyangCompanionUnlocked: false,
     wuchaoyangBossRewardClaimed: false,
     wuchaoyangLastReward: null,
-    wuchaoyangBossKills: 0
+    wuchaoyangBossKills: 0,
+    shenlinLaserUnlocked: false
   };
 
   function normalizeSave(raw) {
@@ -613,6 +637,7 @@
     result.wuchaoyangLastReward = typeof raw.wuchaoyangLastReward === 'string'
       ? raw.wuchaoyangLastReward
       : null;
+    result.shenlinLaserUnlocked = raw.shenlinLaserUnlocked === true;
     result.sfx = raw.sfx !== false;
 
     const owned = [];
@@ -661,8 +686,14 @@
   const WUCHAOYANG_EVENT = eventSystem && eventSystem.events
     ? eventSystem.events.WUCHAOYANG
     : null;
+  const SHENLIN_EVENT = eventSystem && eventSystem.events
+    ? eventSystem.events.SHENLIN
+    : null;
   if (randomEventManager && WUCHAOYANG_EVENT) {
     randomEventManager.register(WUCHAOYANG_EVENT);
+  }
+  if (randomEventManager && SHENLIN_EVENT) {
+    randomEventManager.register(SHENLIN_EVENT);
   }
 
   /* =======================================================
@@ -947,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-29';
-  const BULLET_VERSION = '20261020-29';
+  const AVATAR_VERSION = '20261020-30';
+  const BULLET_VERSION = '20261020-30';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -2257,8 +2288,20 @@
     showScreen('event');
     el.eventScreen.classList.remove('is-hostile', 'is-affection');
     el.eventHearts.innerHTML = '';
+    if (el.eventPanel) el.eventPanel.classList.toggle('is-shenlin', event.id === 'shen-lin');
+    const eyebrow = el.eventScreen.querySelector('.event-topline .eyebrow');
+    const stamp = el.eventScreen.querySelector('.event-portrait-stamp');
+    if (eyebrow) {
+      eyebrow.textContent = event.id === 'shen-lin'
+        ? 'RANDOM EVENT · 第八关'
+        : 'RANDOM EVENT · 第三关之后';
+    }
+    if (stamp) stamp.textContent = event.id === 'shen-lin' ? 'EVENT 02' : 'EVENT 01';
+    const fallback = el.eventScreen.querySelector('.event-portrait-fallback');
+    if (fallback) fallback.textContent = event.id === 'shen-lin' ? '霍' : '吴';
     setEventPortrait(event);
-    renderEventIntro(event);
+    if (event.id === 'shen-lin') renderShenlinIntro(event);
+    else renderEventIntro(event);
     audio.play('event');
     lastFrameTime = performance.now();
   }
@@ -2302,6 +2345,7 @@
   function finishRandomEvent(reason) {
     if (!game || !game.randomEvent.active) return;
     const wasBoss = !!game.eventBossActive;
+    if (game.shenlin) stopShenlinChallenge();
     clearEventTimers();
     if (randomEventManager) randomEventManager.finish();
     game.randomEvent.active = false;
@@ -2320,6 +2364,7 @@
     game.player.invuln = Math.max(game.player.invuln, 1.3);
     game.spawnTimer = Math.max(game.spawnTimer, 1.0);
     if (game.mode === 'stage') {
+      game.stageState = 'fighting';
       setBanner(
         '第 ' + game.stage + ' 关继续',
         '目标：击败 ' + game.stageTarget + ' 名追兵' + (isStageBossStage(game.stage) ? ' · 本关有 BOSS' : ''),
@@ -2334,7 +2379,423 @@
     lastFrameTime = performance.now();
   }
 
+  const SHENLIN_CONFIG = {
+    duration: 12,
+    maxLasers: 16,
+    maxBullets: 180,
+    laserDamage: 14,
+    bulletDamage: 8,
+    warn: 0.8
+  };
+
+  const SHENLIN_SCHEDULE = [
+    { at: 0.15, type: 'cross', count: 3, warn: 0.9, active: 0.3, width: 18, damage: 14 },
+    { at: 1.8, type: 'sweep', warn: 0.75, active: 0.35, width: 20, damage: 14 },
+    { at: 3.1, type: 'burst', count: 20, warn: 0.65, speed: 125, damage: 8, radius: 260 },
+    { at: 4.4, type: 'track', count: 3, warn: 0.85, active: 0.3, width: 18, damage: 14 },
+    { at: 5.7, type: 'cross', count: 4, warn: 0.7, active: 0.28, width: 18, damage: 14 },
+    { at: 7.0, type: 'fan', count: 18, warn: 0.6, speed: 145, damage: 8, spread: 1.05 },
+    { at: 8.3, type: 'sweep', warn: 0.6, active: 0.3, width: 24, damage: 16 },
+    { at: 9.6, type: 'combo', count: 2, warn: 0.65, active: 0.28, width: 18, damage: 16 },
+    { at: 10.9, type: 'cross', count: 4, warn: 0.45, active: 0.25, width: 20, damage: 16 }
+  ];
+
+  function shenlinLaserThrough(x, y, angle, width, warn, active, damage) {
+    if (!game || !game.shenlin) return;
+    const s = game.shenlin;
+    if (s.lasers.length >= SHENLIN_CONFIG.maxLasers) s.lasers.shift();
+    const length = 1500;
+    s.lasers.push({
+      x1: x - Math.cos(angle) * length * 0.5,
+      y1: y - Math.sin(angle) * length * 0.5,
+      x2: x + Math.cos(angle) * length * 0.5,
+      y2: y + Math.sin(angle) * length * 0.5,
+      width: width,
+      phase: 'warn',
+      time: warn,
+      maxTime: warn,
+      activeTime: active,
+      activeTotal: active,
+      damage: damage,
+      hit: false
+    });
+  }
+
+  function shenlinBurst(x, y, count, speed, damage, warn, kind, spread) {
+    if (!game || !game.shenlin) return;
+    game.shenlin.warnings.push({
+      type: kind || 'ring',
+      x: x,
+      y: y,
+      count: count,
+      speed: speed,
+      damage: damage,
+      spread: spread || 0,
+      time: warn,
+      maxTime: warn,
+      baseAngle: kind === 'fan'
+        ? Math.atan2(game.player.y - y, game.player.x - x)
+        : rand(0, TAU)
+    });
+  }
+
+  function spawnShenlinPattern(pattern) {
+    if (!game || !game.shenlin) return;
+    const p = game.player;
+    const s = game.shenlin;
+    if (pattern.type === 'cross') {
+      const base = rand(0, TAU);
+      for (let i = 0; i < pattern.count; i += 1) {
+        shenlinLaserThrough(p.x, p.y, base + (i / pattern.count) * Math.PI, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      }
+    } else if (pattern.type === 'sweep') {
+      shenlinLaserThrough(p.x - 80, p.y - 95, 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      shenlinLaserThrough(p.x + 70, p.y + 95, 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      shenlinLaserThrough(p.x - 170, p.y, Math.PI * 0.5, pattern.width * 0.8, pattern.warn + 0.1, pattern.active, pattern.damage - 2);
+    } else if (pattern.type === 'track') {
+      const points = [
+        { x: p.x + rand(-120, 120), y: p.y + rand(-120, 120) },
+        { x: p.x + rand(-120, 120), y: p.y + rand(-120, 120) },
+        { x: p.x + rand(-120, 120), y: p.y + rand(-120, 120) }
+      ];
+      for (let i = 0; i < points.length; i += 1) {
+        shenlinLaserThrough(points[i].x, points[i].y, rand(0, Math.PI), pattern.width, pattern.warn, pattern.active, pattern.damage);
+      }
+    } else if (pattern.type === 'burst') {
+      const angle = rand(0, TAU);
+      const dist = pattern.radius || 260;
+      shenlinBurst(p.x + Math.cos(angle) * dist, p.y + Math.sin(angle) * dist, pattern.count, pattern.speed, pattern.damage, pattern.warn, 'ring');
+    } else if (pattern.type === 'fan') {
+      shenlinBurst(p.x + rand(-100, 100), p.y - 250, pattern.count, pattern.speed, pattern.damage, pattern.warn, 'fan', pattern.spread);
+    } else if (pattern.type === 'combo') {
+      const base = rand(0, TAU);
+      for (let i = 0; i < pattern.count; i += 1) {
+        shenlinLaserThrough(p.x, p.y, base + (i / pattern.count) * Math.PI, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      }
+      shenlinBurst(p.x, p.y, 14, 110, 8, pattern.warn + 0.05, 'ring');
+    }
+  }
+
+  function spawnShenlinBullet(x, y, angle, speed, damage) {
+    if (!game || !game.shenlin) return;
+    const s = game.shenlin;
+    if (s.bullets.length >= SHENLIN_CONFIG.maxBullets) s.bullets.shift();
+    s.bullets.push({
+      x: x,
+      y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      radius: 8,
+      damage: damage,
+      life: 6,
+      dead: false
+    });
+  }
+
+  function startShenlinChallenge() {
+    if (!game || game.player.dead) return;
+    const event = SHENLIN_EVENT;
+    if (!event) return;
+    clearEventTimers();
+    hideScreens();
+    setState(S.PLAYING);
+    clearInput();
+    game.randomEvent.phase = 'shenlin-fight';
+    game.enemies = [];
+    game.boss = null;
+    game.bossActive = false;
+    game.enemyBullets = [];
+    game.bullets = [];
+    game.spawnTimer = 9999;
+    game.stageState = 'event';
+    game.tutorial = 0;
+    game.player.invuln = Math.max(game.player.invuln, 0.8);
+    game.shenlin = {
+      active: true,
+      elapsed: 0,
+      time: SHENLIN_CONFIG.duration,
+      scheduleIndex: 0,
+      lasers: [],
+      warnings: [],
+      bullets: [],
+      hitCount: 0
+    };
+    game.banner = null;
+    addToast('神临 · 撑过 12 秒', 'warn', 2.0);
+    audio.play('boss_warn');
+    lastFrameTime = performance.now();
+  }
+
+  function stopShenlinChallenge() {
+    if (!game || !game.shenlin) return;
+    game.shenlin.active = false;
+    game.shenlin.lasers = [];
+    game.shenlin.warnings = [];
+    game.shenlin.bullets = [];
+    game.shenlin = null;
+  }
+
+  function updateShenlinChallenge(dt) {
+    if (!game || !game.shenlin || !game.shenlin.active) return;
+    const s = game.shenlin;
+    const p = game.player;
+    if (p.dead) return;
+    s.elapsed += dt;
+    s.time = Math.max(0, SHENLIN_CONFIG.duration - s.elapsed);
+    while (s.scheduleIndex < SHENLIN_SCHEDULE.length &&
+           s.elapsed >= SHENLIN_SCHEDULE[s.scheduleIndex].at) {
+      spawnShenlinPattern(SHENLIN_SCHEDULE[s.scheduleIndex]);
+      s.scheduleIndex += 1;
+    }
+
+    for (let i = s.warnings.length - 1; i >= 0; i -= 1) {
+      const warning = s.warnings[i];
+      warning.time -= dt;
+      if (warning.time > 0) continue;
+      if (warning.type === 'ring') {
+        for (let k = 0; k < warning.count; k += 1) {
+          spawnShenlinBullet(warning.x, warning.y, warning.baseAngle + (k / warning.count) * TAU, warning.speed, warning.damage);
+        }
+      } else {
+        for (let k = 0; k < warning.count; k += 1) {
+          const angle = warning.baseAngle - warning.spread * 0.5 + (k / Math.max(1, warning.count - 1)) * warning.spread;
+          spawnShenlinBullet(warning.x, warning.y, angle, warning.speed, warning.damage);
+        }
+      }
+      s.warnings.splice(i, 1);
+    }
+
+    for (let i = s.lasers.length - 1; i >= 0; i -= 1) {
+      const laser = s.lasers[i];
+      laser.time -= dt;
+      if (laser.phase === 'warn') {
+        if (laser.time <= 0) {
+          laser.phase = 'active';
+          laser.time = laser.activeTime;
+        }
+        continue;
+      }
+      if (!laser.hit && !p.dead &&
+          segmentCircleHit(laser.x1, laser.y1, laser.x2, laser.y2, p.x, p.y, laser.width * 0.5 + p.r)) {
+        laser.hit = true;
+        s.hitCount += 1;
+        damagePlayer(laser.damage, p.x, p.y);
+        if (p.dead) return;
+      }
+      if (laser.time <= 0) s.lasers.splice(i, 1);
+    }
+
+    for (let i = s.bullets.length - 1; i >= 0; i -= 1) {
+      const bullet = s.bullets[i];
+      bullet.life -= dt;
+      bullet.x += bullet.vx * dt;
+      bullet.y += bullet.vy * dt;
+      if (bullet.life <= 0 || bullet.x < 0 || bullet.x > MAP.w || bullet.y < 0 || bullet.y > MAP.h) {
+        s.bullets.splice(i, 1);
+        continue;
+      }
+      if (!p.dead && Math.hypot(bullet.x - p.x, bullet.y - p.y) <= p.r + bullet.radius) {
+        s.bullets.splice(i, 1);
+        s.hitCount += 1;
+        damagePlayer(bullet.damage, bullet.x, bullet.y);
+        if (p.dead) return;
+      }
+    }
+
+    if (s.elapsed >= SHENLIN_CONFIG.duration && !p.dead) {
+      stopShenlinChallenge();
+      showShenlinSuccess();
+    }
+  }
+
+  function renderShenlinIntro(event) {
+    if (!game || !event) return;
+    game.randomEvent.phase = 'shenlin-intro';
+    setEventSpeaker(event.personName, event.intro.role);
+    setEventText(event.intro.text, true);
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    el.eventChoices.appendChild(createEventChoice({
+      icon: 'A',
+      label: event.choices.accept.label,
+      hint: event.choices.accept.hint,
+      className: 'danger',
+      onClick: function () { renderShenlinRules(event); }
+    }));
+    el.eventChoices.appendChild(createEventChoice({
+      icon: 'B',
+      label: event.choices.leave.label,
+      hint: event.choices.leave.hint,
+      className: 'calm',
+      onClick: function () {
+        if (!game || game.randomEvent.phase !== 'shenlin-intro') return;
+        finishRandomEvent('shenlin-decline');
+      }
+    }));
+  }
+
+  function renderShenlinRules(event) {
+    if (!game || !event) return;
+    game.randomEvent.phase = 'shenlin-rules';
+    setEventSpeaker(event.personName, '挑战规则');
+    setEventText('“在我的激光雨下撑过12秒，你就能获得资格。”', true);
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    showEventContinue('开始挑战', function () {
+      if (!game || game.randomEvent.phase !== 'shenlin-rules') return;
+      startShenlinChallenge();
+    }, '12 秒 · 白色丝线预警后才会发射');
+    audio.play('ui');
+  }
+
+  function showShenlinSuccess() {
+    if (!game || !SHENLIN_EVENT) return;
+    game.randomEvent.phase = 'shenlin-success';
+    setState(S.EVENT);
+    clearInput();
+    hideScreens();
+    showScreen('event');
+    if (el.eventPanel) el.eventPanel.classList.add('is-shenlin');
+    setEventSpeaker(SHENLIN_EVENT.personName, '考验通过');
+    setEventText('“孩子，你已经通过了考验，获得了资格。这把武器现在属于你。”', true);
+    el.eventChoices.innerHTML = '';
+    el.eventFooter.innerHTML = '';
+    showEventContinue('领取神罚激光', function () {
+      if (!game || game.randomEvent.phase !== 'shenlin-success') return;
+      grantShenlinLaser();
+      finishRandomEvent('shenlin-success');
+    }, '神罚激光 · 单发 60 / 每秒 4 次 / 无需换弹');
+    audio.play('event_victory');
+    lastFrameTime = performance.now();
+  }
+
+  function grantShenlinLaser() {
+    if (!game || !game.player) return;
+    const p = game.player;
+    save.shenlinLaserUnlocked = true;
+    p.unlocked.laser = true;
+    p.ammo.laser = 0;
+    p.weapon = 'laser';
+    p.shootCd = 0;
+    p.reloading = false;
+    persistSave();
+    addToast('神罚激光已解锁 · 已装备', 'good', 2.4);
+    refreshSkillBar(true);
+    refreshStatsPanel(true);
+  }
+
+  function drawShenlinHazards() {
+    if (!game || !game.shenlin || !game.shenlin.active) return;
+    const s = game.shenlin;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    for (let i = 0; i < s.lasers.length; i += 1) {
+      const laser = s.lasers[i];
+      if (laser.phase === 'warn') {
+        ctx.globalAlpha = 0.55 + Math.sin(performance.now() * 0.018) * 0.25;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.5, laser.width * 0.18);
+        ctx.setLineDash([9, 7]);
+        ctx.beginPath();
+        ctx.moveTo(laser.x1, laser.y1);
+        ctx.lineTo(laser.x2, laser.y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.16;
+        ctx.lineWidth = laser.width;
+        ctx.stroke();
+      } else {
+        const pulse = 0.75 + Math.sin(performance.now() * 0.03) * 0.15;
+        ctx.globalAlpha = 0.28 * pulse;
+        ctx.strokeStyle = '#8feaff';
+        ctx.lineWidth = laser.width + 16;
+        ctx.beginPath();
+        ctx.moveTo(laser.x1, laser.y1);
+        ctx.lineTo(laser.x2, laser.y2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.95;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = laser.width;
+        ctx.stroke();
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = '#d8f7ff';
+        ctx.lineWidth = Math.max(2, laser.width * 0.22);
+        ctx.beginPath();
+        ctx.moveTo(laser.x1, laser.y1);
+        ctx.lineTo(laser.x2, laser.y2);
+        ctx.stroke();
+      }
+    }
+
+    for (let i = 0; i < s.warnings.length; i += 1) {
+      const warning = s.warnings[i];
+      ctx.globalAlpha = 0.5 + Math.sin(performance.now() * 0.02) * 0.25;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([7, 7]);
+      ctx.beginPath();
+      if (warning.type === 'fan') {
+        const spread = warning.spread || 1;
+        ctx.arc(warning.x, warning.y, 300, warning.baseAngle - spread * 0.5, warning.baseAngle + spread * 0.5);
+        for (let k = 0; k <= 4; k += 1) {
+          const a = warning.baseAngle - spread * 0.5 + (k / 4) * spread;
+          ctx.moveTo(warning.x, warning.y);
+          ctx.lineTo(warning.x + Math.cos(a) * 560, warning.y + Math.sin(a) * 560);
+        }
+      } else {
+        ctx.arc(warning.x, warning.y, 76, 0, TAU);
+        for (let k = 0; k < 8; k += 1) {
+          const a = warning.baseAngle + (k / 8) * TAU;
+          ctx.moveTo(warning.x + Math.cos(a) * 22, warning.y + Math.sin(a) * 22);
+          ctx.lineTo(warning.x + Math.cos(a) * 74, warning.y + Math.sin(a) * 74);
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    for (let i = 0; i < s.bullets.length; i += 1) {
+      const bullet = s.bullets[i];
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#dff8ff';
+      ctx.beginPath();
+      ctx.arc(bullet.x - bullet.vx * 0.018, bullet.y - bullet.vy * 0.018, bullet.radius * 1.5, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, bullet.radius, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#ff6b7d';
+      ctx.beginPath();
+      ctx.arc(bullet.x, bullet.y, bullet.radius * 0.45, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawShenlinHUD() {
+    if (!game || !game.shenlin || !game.shenlin.active) return;
+    const s = game.shenlin;
+    const w = Math.min(300, view.w - 32);
+    const h = 46;
+    const x = view.w * 0.5 - w * 0.5;
+    const y = view.w > view.h && view.h < 560 ? 106 : 82;
+    drawPanel(x, y, w, h, 12, 'rgba(8,12,22,0.88)', 'rgba(186,235,255,0.28)');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    setFont(11, 800);
+    ctx.fillStyle = '#f2fbff';
+    ctx.fillText('神临 · 撑过 12 秒', x + w * 0.5, y + 16);
+    setMonoFont(15, 900);
+    ctx.fillStyle = s.time <= 3 ? '#ff6b7d' : '#fff1a8';
+    ctx.fillText(s.time.toFixed(1) + 's', x + w * 0.5, y + 33);
+    drawBar(x + 16, y + 38, w - 32, 4, clamp(s.time / SHENLIN_CONFIG.duration, 0, 1), '#ffcf66', '#ff6b7d', 'rgba(255,255,255,0.08)');
+  }
+
   function cleanupEventOnGameOver() {
+    if (game && game.shenlin) stopShenlinChallenge();
     clearEventTimers();
     if (randomEventManager) randomEventManager.finish();
     if (game) {
@@ -2645,7 +3106,7 @@
 
   function onKeyDown(event) {
     const code = event.code;
-    const gameKeys = ['Space', 'ShiftLeft', 'ShiftRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyQ', 'KeyE', 'KeyR', 'KeyP', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5'];
+    const gameKeys = ['Space', 'ShiftLeft', 'ShiftRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyQ', 'KeyE', 'KeyR', 'KeyP', 'Tab', 'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'];
     if (gameKeys.indexOf(code) !== -1 && state !== S.MENU) {
       event.preventDefault();
     }
@@ -2879,14 +3340,16 @@
         smg: false,
         shotgun: false,
         sniper: false,
-        rocket: false
+        rocket: false,
+        laser: save.shenlinLaserUnlocked === true
       },
       ammo: {
         pistol: WEAPONS.pistol.mag,
         smg: WEAPONS.smg.mag,
         shotgun: WEAPONS.shotgun.mag,
         sniper: WEAPONS.sniper.mag,
-        rocket: WEAPONS.rocket.mag
+        rocket: WEAPONS.rocket.mag,
+        laser: 0
       },
       reloading: false,
       reloadWeapon: null,
@@ -2956,6 +3419,7 @@
       },
       enemies: [],
       bullets: [],
+      laserBeams: [],
       enemyBullets: [],
       companionBullets: [],
       companion: null,
@@ -2986,6 +3450,7 @@
         bossRewardGranted: false,
         rewardChoice: null
       },
+      shenlin: null,
       orbs: [],
       particles: [],
       numbers: [],
@@ -5628,16 +6093,16 @@
     }
 
     const firing = input.mouse.down || input.fireHeld;
-    const infiniteAmmo = hasInfiniteAmmo();
+    const noReload = hasInfiniteAmmo() || !!(WEAPONS[p.weapon] && WEAPONS[p.weapon].noReload);
     if (firing && !p.reloading && p.shootCd <= 0) {
-      if (p.ammo[p.weapon] <= 0 && !infiniteAmmo) {
+      if (!noReload && p.ammo[p.weapon] <= 0) {
         tryReload(true);
       } else {
         fireWeapon();
       }
     }
 
-    if (firing && !p.reloading && !infiniteAmmo && p.ammo[p.weapon] <= 0 && p.shootCd <= 0) {
+    if (firing && !p.reloading && !noReload && p.ammo[p.weapon] <= 0 && p.shootCd <= 0) {
       tryReload(true);
     }
   }
@@ -5687,6 +6152,7 @@
     if (p.dead || p.reloading) return;
     if (hasInfiniteAmmo()) return;
     const key = p.weapon;
+    if (WEAPONS[key] && WEAPONS[key].noReload) return;
     const maxMag = weaponMaxMag(key);
     if (p.ammo[key] >= maxMag) {
       if (!automatic) {
@@ -5784,13 +6250,13 @@
     const key = p.weapon;
     const def = WEAPONS[key];
     const stats = getWeaponStats(key);
-    const infiniteAmmo = hasInfiniteAmmo();
-    if (p.ammo[key] <= 0 && !infiniteAmmo) {
+    const noReload = hasInfiniteAmmo() || !!def.noReload;
+    if (p.ammo[key] <= 0 && !noReload) {
       tryReload(true);
       return;
     }
 
-    if (!infiniteAmmo) p.ammo[key] -= 1;
+    if (!noReload) p.ammo[key] -= 1;
     p.shootCd = stats.fireInterval;
     p.muzzle = 0.075;
     p.recoil = 1;
@@ -5821,8 +6287,20 @@
       }
       addShake(7);
       audio.play('scythe');
-      if (!infiniteAmmo && p.ammo[key] <= 0) tryReload(true);
+      if (!noReload && p.ammo[key] <= 0) tryReload(true);
       return;
+    }
+
+    if (def.laser) {
+      if (game.laserBeams.length >= 8) game.laserBeams.shift();
+      game.laserBeams.push({
+        x1: muzzleX,
+        y1: muzzleY,
+        x2: muzzleX + Math.cos(baseAngle) * def.range,
+        y2: muzzleY + Math.sin(baseAngle) * def.range,
+        life: 0.085,
+        maxLife: 0.085
+      });
     }
 
     for (let i = 0; i < pellets; i += 1) {
@@ -5864,7 +6342,7 @@
 
     audio.play(def.sound);
 
-    if (p.ammo[key] <= 0) {
+    if (!noReload && p.ammo[key] <= 0) {
       tryReload(true);
     }
   }
@@ -5893,6 +6371,9 @@
       color: def.color,
       glow: def.glow,
       kind: key,
+      laser: !!def.laser,
+      originX: x,
+      originY: y,
       splashDamage: (def.splashDamage || 0) * game.player.damageMult,
       splashRadius: def.splashRadius || 0,
       dead: false,
@@ -7540,6 +8021,15 @@
       });
       if (event) openRandomEvent(event);
     }
+
+    // 神临只会在进入第 8 关时尝试一次；事件管理器自身也限制了其他触发点的候选。
+    if (game.stage === 8 && game.mode === 'stage' && randomEventManager) {
+      const shenlinEvent = randomEventManager.tryTrigger('stage-enter', {
+        stage: 8,
+        mode: game.mode
+      });
+      if (shenlinEvent) openRandomEvent(shenlinEvent);
+    }
   }
 
   /* =======================================================
@@ -7607,6 +8097,12 @@
     p.dead = true;
     p.hp = 0;
     p.dashTime = 0;
+    if (game.shenlin) {
+      stopShenlinChallenge();
+      if (randomEventManager) randomEventManager.finish();
+      game.randomEvent.active = false;
+      game.randomEvent.phase = 'dead';
+    }
     if (game.eventBossActive) {
       game.eventBossActive = false;
       game.eventBoss = null;
@@ -7941,7 +8437,7 @@
     if (!game) return null;
     const p = game.player;
     const nextKey = WEAPON_ORDER.find(function (key) {
-      return !p.unlocked[key];
+      return key !== 'laser' && !p.unlocked[key];
     });
     if (!nextKey) return null;
     const def = WEAPONS[nextKey];
@@ -8240,6 +8736,13 @@
           pushX: (dx / length) * push,
           pushY: (dy / length) * push
         });
+        if (bullet.laser) {
+          addRing(nextX, nextY, 16, '#e8fbff', 0.22, 3);
+          for (let k = 0; k < 5; k += 1) {
+            const a = rand(0, TAU);
+            spawnParticle(nextX, nextY, Math.cos(a) * rand(20, 90), Math.sin(a) * rand(20, 90), rand(0.12, 0.28), rand(2, 4), '#dff9ff', true);
+          }
+        }
 
         const canPierce = bullet.pierce > 1;
         if (canPierce) {
@@ -8365,6 +8868,10 @@
 
   function updateEffects(dt) {
     if (!game) return;
+    if (game.laserBeams && game.laserBeams.length) {
+      for (let i = 0; i < game.laserBeams.length; i += 1) game.laserBeams[i].life -= dt;
+      game.laserBeams = game.laserBeams.filter(function (beam) { return beam.life > 0; });
+    }
 
     for (let i = 0; i < game.particles.length; i += 1) {
       const particle = game.particles[i];
@@ -8523,13 +9030,20 @@
     updatePlayerCombat(dt);
     if (state !== S.PLAYING) return;
 
+    if (game.shenlin && game.shenlin.active) {
+      updateShenlinChallenge(dt);
+      if (state !== S.PLAYING) return;
+    }
+
     const frozen = isFreezeActive();
     updateCompanion(dt);
     if (!frozen) {
       updateEventBoss(dt);
       if (state !== S.PLAYING) return;
-      updateSpawning(dt);
-      updateEnemies(dt);
+      if (!game.shenlin) {
+        updateSpawning(dt);
+        updateEnemies(dt);
+      }
     }
     if (state === S.PLAYING) updateSkillProjectiles(dt);
     if (state === S.PLAYING) updateBrideProjectiles(dt);
@@ -8743,6 +9257,19 @@
       ctx.fill();
       ctx.fillRect(-8, 4, 5, 8);
       ctx.strokeRect(-16, -6, 28, 10);
+    } else if (key === 'laser') {
+      ctx.fillRect(-16, -4, 18, 8);
+      ctx.beginPath();
+      ctx.moveTo(2, -3);
+      ctx.lineTo(18, -1);
+      ctx.lineTo(2, 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeRect(-16, -4, 18, 8);
+      ctx.beginPath();
+      ctx.moveTo(-4, -9);
+      ctx.lineTo(-4, 7);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -8863,12 +9390,14 @@
     drawNunEntities();
     drawKoreanZombie();
     drawBullets();
+    drawLaserBeams();
     drawSkillProjectiles();
     drawBrideProjectiles();
     drawCompanionBullets();
     drawParticles();
     drawDamageNumbers();
     drawKoreanUltimate(now);
+    drawShenlinHazards();
 
     ctx.restore();
   }
@@ -11022,6 +11551,37 @@
     return 58;
   }
 
+  function drawLaserBeams() {
+    if (!game || !game.laserBeams || !game.laserBeams.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < game.laserBeams.length; i += 1) {
+      const beam = game.laserBeams[i];
+      const alpha = clamp(beam.life / beam.maxLife, 0, 1);
+      ctx.globalAlpha = alpha * 0.26;
+      ctx.strokeStyle = '#77e8ff';
+      ctx.lineWidth = 20;
+      ctx.beginPath();
+      ctx.moveTo(beam.x1, beam.y1);
+      ctx.lineTo(beam.x2, beam.y2);
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(beam.x1, beam.y1);
+      ctx.lineTo(beam.x2, beam.y2);
+      ctx.stroke();
+      ctx.strokeStyle = '#bff8ff';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(beam.x1, beam.y1);
+      ctx.lineTo(beam.x2, beam.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   function drawBullets() {
     // 每帧只取一次当前皮肤，避免逐颗子弹查表；EDG 返回 null，继续原绘制。
     const equippedFx = getEquippedBulletFx();
@@ -11044,6 +11604,29 @@
         ctx.fillStyle = '#fff0c4';
         ctx.beginPath();
         ctx.arc(bullet.x, bullet.y, Math.max(1.5, bullet.radius * 0.7), 0, TAU);
+        ctx.fill();
+        ctx.restore();
+        continue;
+      }
+
+      if (bullet.laser) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.strokeStyle = 'rgba(119,232,255,0.28)';
+        ctx.lineWidth = 12;
+        ctx.beginPath();
+        ctx.moveTo(bullet.originX, bullet.originY);
+        ctx.lineTo(bullet.x, bullet.y);
+        ctx.stroke();
+        ctx.strokeStyle = '#e8fbff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(bullet.originX, bullet.originY);
+        ctx.lineTo(bullet.x, bullet.y);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(bullet.x, bullet.y, 4, 0, TAU);
         ctx.fill();
         ctx.restore();
         continue;
@@ -11545,6 +12128,7 @@
 
     drawBossHUD();
     drawEventBossHUD();
+    drawShenlinHUD();
     drawCoinReward();
     drawToasts();
     drawTutorial();
@@ -11676,7 +12260,8 @@
 
     const weapon = WEAPONS[p.weapon];
     const maxMag = weaponMaxMag(p.weapon);
-    const infinite = hasInfiniteAmmo();
+    const noReload = !!weapon.noReload;
+    const infinite = hasInfiniteAmmo() || noReload;
     const melee = isNunFireForm();
     if (melee) {
       ctx.save();
@@ -11720,13 +12305,13 @@
       ctx.fillText(infinite ? '∞' : String(ammo), x + 62, y + 64);
       setMonoFont(10, 700);
       ctx.fillStyle = infinite ? '#ffcf66' : '#738b9e';
-      ctx.fillText(infinite ? '无限弹药' : '/ ' + maxMag, x + 62 + ctx.measureText(infinite ? '∞' : String(ammo)).width + 6, y + 64);
+      ctx.fillText(infinite ? (noReload ? '无需换弹' : '无限弹药') : '/ ' + maxMag, x + 62 + ctx.measureText(infinite ? '∞' : String(ammo)).width + 6, y + 64);
 
       if (infinite) {
         ctx.textAlign = 'right';
         setFont(8, 700);
         ctx.fillStyle = '#ffcf66';
-        ctx.fillText('Q · 极速射击生效中', x + w - 12, y + 64);
+        ctx.fillText(noReload ? '持续激光 · 无需换弹' : 'Q · 极速射击生效中', x + w - 12, y + 64);
       } else if (p.reloading) {
         const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
         drawBar(x + 160, y + 56, 104, 5, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
@@ -11744,7 +12329,7 @@
 
     const slotsY = y + 82;
     const gap = 6;
-    const slotW = (w - 24 - gap * 4) / 5;
+    const slotW = (w - 24 - gap * (WEAPON_ORDER.length - 1)) / WEAPON_ORDER.length;
     for (let i = 0; i < WEAPON_ORDER.length; i += 1) {
       const key = WEAPON_ORDER[i];
       const weaponDef = WEAPONS[key];
@@ -11894,17 +12479,18 @@
       ctx.fillStyle = '#ffcf66';
       ctx.fillText('Q 附魔', wpX + wpW - 9, wpY + 41);
     } else {
-      const infinite = hasInfiniteAmmo();
+      const noReload = !!WEAPONS[p.weapon].noReload;
+      const infinite = hasInfiniteAmmo() || noReload;
       setMonoFont(infinite ? 13 : 15, 800);
       ctx.fillStyle = infinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
       ctx.fillText(infinite ? '∞' : String(p.ammo[p.weapon]), wpX + 34, wpY + 33);
       setMonoFont(8, 700);
       ctx.fillStyle = '#70889a';
-      ctx.fillText(infinite ? '无限' : '/ ' + weaponMaxMag(p.weapon), wpX + 58, wpY + 33);
+      ctx.fillText(infinite ? (noReload ? '无需换弹' : '无限') : '/ ' + weaponMaxMag(p.weapon), wpX + 58, wpY + 33);
       ctx.textAlign = 'right';
       setFont(7, 600);
       ctx.fillStyle = p.reloading ? '#ffcf66' : '#607b8e';
-      ctx.fillText(p.reloading ? '装填 ' + p.reloadRemaining.toFixed(1) + 's' : 'R 换弹', wpX + wpW - 9, wpY + 41);
+      ctx.fillText(p.reloading ? '装填 ' + p.reloadRemaining.toFixed(1) + 's' : (noReload ? '持续射击' : 'R 换弹'), wpX + wpW - 9, wpY + 41);
     }
   }
 
@@ -11983,14 +12569,15 @@
     setFont(11.5, 800);
     ctx.fillStyle = '#eaf8ff';
     ctx.fillText(WEAPONS[p.weapon].name, wpX + 40, wpY + 17);
-    const compactInfinite = hasInfiniteAmmo();
+    const compactNoReload = !!WEAPONS[p.weapon].noReload;
+    const compactInfinite = hasInfiniteAmmo() || compactNoReload;
     setMonoFont(compactInfinite ? 15 : 17, 800);
     ctx.fillStyle = compactInfinite ? '#ffcf66' : (p.ammo[p.weapon] === 0 ? '#ff5f77' : '#fff3d5');
     ctx.fillText(compactInfinite ? '∞' : String(p.ammo[p.weapon]), wpX + 40, wpY + 38);
     setMonoFont(8.5, 700);
     ctx.fillStyle = compactInfinite ? '#ffcf66' : '#70889a';
     ctx.fillText(
-      compactInfinite ? '无限' : '/ ' + weaponMaxMag(p.weapon),
+      compactInfinite ? (compactNoReload ? '无需换弹' : '无限') : '/ ' + weaponMaxMag(p.weapon),
       wpX + 40 + ((compactInfinite ? '∞' : String(p.ammo[p.weapon])).length * 10) + 4,
       wpY + 38
     );
@@ -11999,7 +12586,7 @@
       ctx.textAlign = 'right';
       setFont(7.5, 700);
       ctx.fillStyle = '#ffcf66';
-      ctx.fillText('Q 生效', wpX + wpW - 9, wpY + 48);
+      ctx.fillText(compactNoReload ? '持续激光' : 'Q 生效', wpX + wpW - 9, wpY + 48);
     } else if (p.reloading) {
       const ratio = 1 - p.reloadRemaining / Math.max(0.01, p.reloadTotal);
       drawBar(wpX + 102, wpY + 33, 56, 4, ratio, '#ffcf66', '#ffad54', 'rgba(255,255,255,0.07)');
