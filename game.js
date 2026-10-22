@@ -978,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-35';
-  const BULLET_VERSION = '20261020-35';
+  const AVATAR_VERSION = '20261020-36';
+  const BULLET_VERSION = '20261020-36';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -9446,7 +9446,11 @@
       updateDying(dt);
     }
 
-    render(now);
+    // CG 是独立 HTML 视频层；播放期间跳过整张游戏画布的逐帧重绘，避免
+    // Canvas + backdrop-filter 与视频解码争夺主线程/合成线程。
+    if (state !== S.CUTSCENE) {
+      render(now);
+    }
     window.requestAnimationFrame(loop);
   }
 

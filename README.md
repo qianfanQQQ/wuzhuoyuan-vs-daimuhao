@@ -379,7 +379,7 @@ npx serve .
 ## 第 10 关隐藏后续 Boss：黑色阿吊
 
 - 只会在关卡模式第 10 关原有 Boss 被击败后触发，其他关卡和生存模式不触发。
-- 先播放 `assets/video/black-adiao.mp4`，期间暂停战斗、敌人、刷怪和输入；支持跳过，视频结束或异常时进入 Boss 战。
+- 先播放 `assets/video/black-adiao.mp4`，期间暂停战斗、敌人、刷怪、输入和 Canvas 逐帧重绘；视频层不启用 backdrop-filter，支持跳过，视频结束或异常时进入 Boss 战。
 - Boss 外观使用 `assets/events/black-adiao.png`；近战武器使用 `assets/events/black-adiao-weapon.png`。
 - 远距离：旋转弹、多层环形、密集扇形、交叉齐射和组合弹幕，数量受现有敌方子弹上限控制。
 - 近距离：前摇显示落点范围和武器贴图，随后砸下；预警与实际伤害半径共用同一参数。
@@ -424,4 +424,4 @@ npx serve .
 4. 在商城和仓库中应能看到五张不同的皮肤图片；装备不同皮肤后，游戏角色和左上角 HUD 会同步变化。
 5. 如果状态为 `"fallback"`，控制台会给出失败 URL、重试次数以及 HTTP/网络错误；请确认 `assets` 目录与 `index.html` 一起部署，文件名大小写完全一致。
 
-> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-35`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。
+> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-36`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。
