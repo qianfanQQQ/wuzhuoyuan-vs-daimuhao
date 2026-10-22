@@ -424,4 +424,4 @@ npx serve .
 4. 在商城和仓库中应能看到五张不同的皮肤图片；装备不同皮肤后，游戏角色和左上角 HUD 会同步变化。
 5. 如果状态为 `"fallback"`，控制台会给出失败 URL、重试次数以及 HTTP/网络错误；请确认 `assets` 目录与 `index.html` 一起部署，文件名大小写完全一致。
 
-> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-33`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。
+> 如果替换了图片但页面仍显示旧图，请把 `index.html` 中的 `?v=20261020-34`、`game.js` 里的 `AVATAR_VERSION` 和 `BULLET_VERSION` 改成新的版本号，然后强制刷新页面。
