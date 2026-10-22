@@ -610,8 +610,7 @@
     wuchaoyangCompanionUnlocked: false,
     wuchaoyangBossRewardClaimed: false,
     wuchaoyangLastReward: null,
-    wuchaoyangBossKills: 0,
-    shenlinLaserUnlocked: false
+    wuchaoyangBossKills: 0
   };
 
   function normalizeSave(raw) {
@@ -637,7 +636,7 @@
     result.wuchaoyangLastReward = typeof raw.wuchaoyangLastReward === 'string'
       ? raw.wuchaoyangLastReward
       : null;
-    result.shenlinLaserUnlocked = raw.shenlinLaserUnlocked === true;
+    // 旧存档中的 shenlinLaserUnlocked 不再恢复：神罚激光只属于获得它的那一局。
     result.sfx = raw.sfx !== false;
 
     const owned = [];
@@ -978,8 +977,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-31';
-  const BULLET_VERSION = '20261020-31';
+  const AVATAR_VERSION = '20261020-32';
+  const BULLET_VERSION = '20261020-32';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -2707,13 +2706,12 @@
   function grantShenlinLaser() {
     if (!game || !game.player) return;
     const p = game.player;
-    save.shenlinLaserUnlocked = true;
+    // 仅写入当前对局的玩家武器状态，不写入持久存档。
     p.unlocked.laser = true;
     p.ammo.laser = 0;
     p.weapon = 'laser';
     p.shootCd = 0;
     p.reloading = false;
-    persistSave();
     addToast('神罚激光已解锁 · 已装备', 'good', 2.4);
     refreshSkillBar(true);
     refreshStatsPanel(true);
@@ -3376,7 +3374,7 @@
         shotgun: false,
         sniper: false,
         rocket: false,
-        laser: save.shenlinLaserUnlocked === true
+        laser: false
       },
       ammo: {
         pistol: WEAPONS.pistol.mag,
