@@ -978,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-30';
-  const BULLET_VERSION = '20261020-30';
+  const AVATAR_VERSION = '20261020-31';
+  const BULLET_VERSION = '20261020-31';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -2362,7 +2362,9 @@
     clearInput();
     setState(S.PLAYING);
     game.player.invuln = Math.max(game.player.invuln, 1.3);
-    game.spawnTimer = Math.max(game.spawnTimer, 1.0);
+    // 神临挑战会把 spawnTimer 设为 9999 来暂停普通刷怪；事件结束时必须恢复，
+    // 不能继续用 max() 保留这个暂停值。
+    game.spawnTimer = 1.0;
     if (game.mode === 'stage') {
       game.stageState = 'fighting';
       setBanner(
@@ -2381,23 +2383,30 @@
 
   const SHENLIN_CONFIG = {
     duration: 12,
-    maxLasers: 16,
-    maxBullets: 180,
+    maxLasers: 28,
+    maxBullets: 260,
     laserDamage: 14,
     bulletDamage: 8,
     warn: 0.8
   };
 
+  // 攻击窗口刻意重叠，形成多层压力；每个窗口仍保留可移动的安全间隙。
   const SHENLIN_SCHEDULE = [
-    { at: 0.15, type: 'cross', count: 3, warn: 0.9, active: 0.3, width: 18, damage: 14 },
-    { at: 1.8, type: 'sweep', warn: 0.75, active: 0.35, width: 20, damage: 14 },
-    { at: 3.1, type: 'burst', count: 20, warn: 0.65, speed: 125, damage: 8, radius: 260 },
-    { at: 4.4, type: 'track', count: 3, warn: 0.85, active: 0.3, width: 18, damage: 14 },
-    { at: 5.7, type: 'cross', count: 4, warn: 0.7, active: 0.28, width: 18, damage: 14 },
-    { at: 7.0, type: 'fan', count: 18, warn: 0.6, speed: 145, damage: 8, spread: 1.05 },
-    { at: 8.3, type: 'sweep', warn: 0.6, active: 0.3, width: 24, damage: 16 },
-    { at: 9.6, type: 'combo', count: 2, warn: 0.65, active: 0.28, width: 18, damage: 16 },
-    { at: 10.9, type: 'cross', count: 4, warn: 0.45, active: 0.25, width: 20, damage: 16 }
+    { at: 0.10, type: 'cross', count: 4, warn: 0.82, active: 0.28, width: 16, damage: 14 },
+    { at: 1.15, type: 'grid', warn: 0.65, active: 0.28, width: 14, damage: 14 },
+    { at: 2.05, type: 'burst', count: 26, warn: 0.58, speed: 120, damage: 8, radius: 250 },
+    { at: 2.85, type: 'fanVolley', count: 20, warn: 0.54, speed: 150, damage: 8, spread: 1.15 },
+    { at: 3.65, type: 'grid', warn: 0.55, active: 0.26, width: 16, damage: 15 },
+    { at: 4.35, type: 'doubleRing', count: 22, warn: 0.5, speed: 135, damage: 8 },
+    { at: 5.05, type: 'track', count: 4, warn: 0.7, active: 0.25, width: 16, damage: 15 },
+    { at: 5.95, type: 'fanVolley', count: 24, warn: 0.45, speed: 165, damage: 9, spread: 1.35 },
+    { at: 6.65, type: 'sweepGrid', warn: 0.5, active: 0.26, width: 18, damage: 16 },
+    { at: 7.35, type: 'burst', count: 30, warn: 0.42, speed: 155, damage: 9, radius: 280 },
+    { at: 8.05, type: 'cross', count: 5, warn: 0.58, active: 0.24, width: 18, damage: 16 },
+    { at: 8.75, type: 'doubleRing', count: 26, warn: 0.4, speed: 160, damage: 9 },
+    { at: 9.45, type: 'grid', warn: 0.44, active: 0.24, width: 18, damage: 17 },
+    { at: 10.15, type: 'fanVolley', count: 28, warn: 0.38, speed: 180, damage: 9, spread: 1.55 },
+    { at: 10.85, type: 'cross', count: 5, warn: 0.36, active: 0.2, width: 20, damage: 17 }
   ];
 
   function shenlinLaserThrough(x, y, angle, width, warn, active, damage) {
@@ -2421,7 +2430,7 @@
     });
   }
 
-  function shenlinBurst(x, y, count, speed, damage, warn, kind, spread) {
+  function shenlinBurst(x, y, count, speed, damage, warn, kind, spread, fixedAngle) {
     if (!game || !game.shenlin) return;
     game.shenlin.warnings.push({
       type: kind || 'ring',
@@ -2433,9 +2442,11 @@
       spread: spread || 0,
       time: warn,
       maxTime: warn,
-      baseAngle: kind === 'fan'
-        ? Math.atan2(game.player.y - y, game.player.x - x)
-        : rand(0, TAU)
+      baseAngle: fixedAngle !== undefined
+        ? fixedAngle
+        : (kind === 'fan'
+          ? Math.atan2(game.player.y - y, game.player.x - x)
+          : rand(0, TAU))
     });
   }
 
@@ -2452,6 +2463,30 @@
       shenlinLaserThrough(p.x - 80, p.y - 95, 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
       shenlinLaserThrough(p.x + 70, p.y + 95, 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
       shenlinLaserThrough(p.x - 170, p.y, Math.PI * 0.5, pattern.width * 0.8, pattern.warn + 0.1, pattern.active, pattern.damage - 2);
+    } else if (pattern.type === 'grid') {
+      const ys = [-150, -55, 60, 155];
+      const xs = [-170, 0, 175];
+      for (let i = 0; i < ys.length; i += 1) {
+        shenlinLaserThrough(p.x, p.y + ys[i], 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      }
+      for (let i = 0; i < xs.length; i += 1) {
+        shenlinLaserThrough(p.x + xs[i], p.y, Math.PI * 0.5, pattern.width, pattern.warn + 0.08, pattern.active, pattern.damage);
+      }
+    } else if (pattern.type === 'sweepGrid') {
+      shenlinLaserThrough(p.x, p.y - 125, 0, pattern.width, pattern.warn, pattern.active, pattern.damage);
+      shenlinLaserThrough(p.x, p.y + 125, 0, pattern.width, pattern.warn + 0.08, pattern.active, pattern.damage);
+      shenlinLaserThrough(p.x - 135, p.y, Math.PI * 0.5, pattern.width, pattern.warn + 0.16, pattern.active, pattern.damage);
+      shenlinLaserThrough(p.x + 135, p.y, Math.PI * 0.5, pattern.width, pattern.warn + 0.24, pattern.active, pattern.damage);
+    } else if (pattern.type === 'doubleRing') {
+      const angle = rand(0, TAU);
+      const cx = p.x + Math.cos(angle) * 230;
+      const cy = p.y + Math.sin(angle) * 230;
+      const base = rand(0, TAU);
+      shenlinBurst(cx, cy, pattern.count, pattern.speed, pattern.damage, pattern.warn, 'ring', 0, base);
+      shenlinBurst(cx, cy, Math.max(12, pattern.count - 4), pattern.speed * 1.28, pattern.damage, pattern.warn + 0.12, 'ring', 0, base + Math.PI / Math.max(12, pattern.count));
+    } else if (pattern.type === 'fanVolley') {
+      shenlinBurst(p.x + rand(-70, 70), p.y - 250, pattern.count, pattern.speed, pattern.damage, pattern.warn, 'fan', pattern.spread);
+      shenlinBurst(p.x + rand(-70, 70), p.y + 250, Math.max(12, pattern.count - 4), pattern.speed * 1.12, pattern.damage, pattern.warn + 0.12, 'fan', pattern.spread * 0.9);
     } else if (pattern.type === 'track') {
       const points = [
         { x: p.x + rand(-120, 120), y: p.y + rand(-120, 120) },
