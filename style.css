@@ -4819,3 +4819,10 @@ body.touch .skill-lock-note {
   }
   body.touch .skill-bar .skill-timer { font-size: 14px !important; }
 }
+/* CG 播放期间把静态游戏画布移出合成层，视频结束后自动恢复。 */
+body[data-state="cutscene"] #gameCanvas {
+  visibility: hidden;
+}
+.boss-video-screen {
+  contain: strict;
+}

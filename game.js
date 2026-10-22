@@ -978,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-36';
-  const BULLET_VERSION = '20261020-36';
+  const AVATAR_VERSION = '20261020-37';
+  const BULLET_VERSION = '20261020-37';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
@@ -8116,6 +8116,21 @@
     }
   }
 
+  function blackAdiaoVideoUrl() {
+    return 'assets/video/black-adiao.mp4?v=' + AVATAR_VERSION;
+  }
+
+  function preloadBlackAdiaoVideo() {
+    if (!el.blackAdiaoVideo) return;
+    const video = el.blackAdiaoVideo;
+    const url = blackAdiaoVideoUrl();
+    if (video.dataset.blackAdiaoSrc === url) return;
+    video.dataset.blackAdiaoSrc = url;
+    video.preload = 'auto';
+    video.src = url;
+    video.load();
+  }
+
   function beginBlackAdiaoVideo() {
     if (!game || !el.blackAdiaoVideo) return false;
     if (game.blackAdiaoVideoActive || game.blackAdiaoTriggered) return false;
@@ -8131,9 +8146,8 @@
     clearInput();
     hideScreens();
     showScreen('blackAdiaoVideo');
-    el.blackAdiaoVideo.currentTime = 0;
-    el.blackAdiaoVideo.src = 'assets/video/black-adiao.mp4?v=' + AVATAR_VERSION;
-    el.blackAdiaoVideo.load();
+    preloadBlackAdiaoVideo();
+    try { el.blackAdiaoVideo.currentTime = 0; } catch (error) { /* metadata may still be loading */ }
     const playPromise = el.blackAdiaoVideo.play();
     if (playPromise && typeof playPromise.catch === 'function') {
       playPromise.catch(function () {
@@ -8344,6 +8358,10 @@
     game.stageState = 'fighting';
     game.stageTransition = 0;
     game.spawnTimer = 0.9;
+    if (game.stage === 10 && game.mode === 'stage') {
+      // 第 10 关开始即预热缩小后的 CG，避免 Boss 死亡后才开始下载/解码。
+      preloadBlackAdiaoVideo();
+    }
     game.score += 250 + game.stage * 60;
     healPlayer(15, true);
     setBanner(
