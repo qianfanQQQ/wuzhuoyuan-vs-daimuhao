@@ -4771,3 +4771,49 @@ body.touch .skill-lock-note {
   .boss-video-title { font-size: 9px; }
   .boss-video-skip { right: 12px; bottom: 12px; }
 }
+/* 手机横屏：Q/E/R 移到右侧操作区，按低/中/高弧线排列。 */
+@media (orientation: landscape) and (max-height: 540px) {
+  body.touch[data-state="playing"] .skill-bar {
+    position: fixed !important;
+    inset: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    transform: none !important;
+    pointer-events: none !important;
+    z-index: 46;
+  }
+  body.touch .skill-bar .skill-slot {
+    position: absolute !important;
+    width: 56px !important;
+    height: 56px !important;
+    border-radius: 12px !important;
+  }
+  body.touch .skill-bar .skill-q {
+    left: auto !important;
+    top: auto !important;
+    right: calc(25% + env(safe-area-inset-right)) !important;
+    bottom: calc(9% + env(safe-area-inset-bottom)) !important;
+  }
+  body.touch .skill-bar .skill-e {
+    left: auto !important;
+    top: 58% !important;
+    right: calc(20% + env(safe-area-inset-right)) !important;
+    bottom: auto !important;
+  }
+  body.touch .skill-bar .skill-r {
+    left: auto !important;
+    top: 38% !important;
+    right: calc(12% + env(safe-area-inset-right)) !important;
+    bottom: auto !important;
+  }
+  body.touch .skill-bar .skill-lock-note {
+    position: absolute;
+    left: 50%;
+    bottom: calc(8% + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+  }
+  body.touch .skill-bar .skill-timer { font-size: 14px !important; }
+}

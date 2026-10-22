@@ -978,8 +978,8 @@
      基准解析，避免页面被部署到子目录或从不同入口打开时把
      assets 解析到错误位置。
      ======================================================= */
-  const AVATAR_VERSION = '20261020-34';
-  const BULLET_VERSION = '20261020-34';
+  const AVATAR_VERSION = '20261020-35';
+  const BULLET_VERSION = '20261020-35';
   const koreanHorseTexture = new Image();
   koreanHorseTexture.decoding = 'async';
   koreanHorseTexture.src = 'assets/effects/korean-horse.jpg?v=' + AVATAR_VERSION;
