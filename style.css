@@ -4826,3 +4826,139 @@ body[data-state="cutscene"] #gameCanvas {
 .boss-video-screen {
   contain: strict;
 }
+
+/* =========================================================
+   手机横屏最终布局（参考布局图，仅调整位置、尺寸与间距）
+   桌面端不命中 body.touch，保持原布局。
+   ========================================================= */
+@media (orientation: landscape) {
+  body.touch {
+    --tc-edge-x: max(10px, env(safe-area-inset-right));
+    --tc-edge-b: max(10px, env(safe-area-inset-bottom));
+    --tc-small: clamp(42px, 12vh, 58px);
+    --tc-fire: clamp(112px, 32vh, 164px);
+    --tc-skill: clamp(48px, 13.5vh, 72px);
+  }
+
+  /* 右侧原瞄准摇杆移除；左侧移动摇杆放大并略向右。 */
+  body.touch .aim-joystick {
+    display: none !important;
+  }
+
+  body.touch .move-joystick {
+    left: max(28px, env(safe-area-inset-left)) !important;
+    bottom: max(20px, env(safe-area-inset-bottom)) !important;
+  }
+
+  body.touch .move-joystick .joystick-base {
+    width: clamp(132px, 20.5vw, 190px) !important;
+    height: clamp(132px, 20.5vw, 190px) !important;
+  }
+
+  body.touch .move-joystick .joystick-knob {
+    width: clamp(52px, 9vw, 80px) !important;
+    height: clamp(52px, 9vw, 80px) !important;
+  }
+
+  /* 操作按钮使用整屏定位层。 */
+  body.touch .touch-actions {
+    position: absolute !important;
+    inset: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  /* 右侧三小键：冲刺、切枪、换弹，按尺寸堆叠，避免互相覆盖。 */
+  body.touch .small-button,
+  body.touch .dash-button {
+    right: calc(2% + env(safe-area-inset-right)) !important;
+    width: var(--tc-small) !important;
+    height: var(--tc-small) !important;
+    min-width: 0 !important;
+    border-radius: 50% !important;
+    font-size: clamp(9px, 2.1vh, 12px) !important;
+  }
+
+  body.touch .dash-button {
+    bottom: 10% !important;
+  }
+
+  body.touch .switch-button {
+    bottom: calc(10% + var(--tc-small) + 6px) !important;
+  }
+
+  body.touch .reload-button {
+    bottom: calc(10% + (var(--tc-small) + 6px) * 2) !important;
+  }
+
+  /* 开火键放大并占据右下原摇杆区域，和三小键留出固定间距。 */
+  body.touch .fire-button {
+    right: calc(2% + var(--tc-small) + 8px + env(safe-area-inset-right)) !important;
+    bottom: 18% !important;
+    width: var(--tc-fire) !important;
+    height: var(--tc-fire) !important;
+    font-size: clamp(14px, 3vh, 19px) !important;
+  }
+
+  /* Q/E/R 围绕开火键：Q 左下、E 左上、R 上方。 */
+  body.touch[data-state="playing"] .skill-bar {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    transform: none !important;
+    pointer-events: none !important;
+    z-index: 46;
+  }
+
+  body.touch .skill-bar .skill-slot {
+    position: absolute !important;
+    width: var(--tc-skill) !important;
+    height: var(--tc-skill) !important;
+    border-radius: clamp(12px, 2.2vh, 18px) !important;
+  }
+
+  body.touch .skill-bar .skill-q {
+    left: auto !important;
+    top: auto !important;
+    right: calc(2% + var(--tc-small) + 8px + var(--tc-fire) + 10px + env(safe-area-inset-right)) !important;
+    bottom: 18% !important;
+  }
+
+  body.touch .skill-bar .skill-e {
+    left: auto !important;
+    top: auto !important;
+    right: calc(2% + var(--tc-small) + 8px + var(--tc-fire) + 2px + env(safe-area-inset-right)) !important;
+    bottom: calc(18% + var(--tc-skill) + 8px) !important;
+  }
+
+  body.touch .skill-bar .skill-r {
+    left: auto !important;
+    top: auto !important;
+    right: calc(2% + var(--tc-small) + 52px + env(safe-area-inset-right)) !important;
+    bottom: calc(18% + var(--tc-fire) + 8px) !important;
+  }
+
+  body.touch .skill-bar .skill-timer {
+    font-size: clamp(13px, 3vh, 18px) !important;
+  }
+
+  body.touch .skill-bar .skill-name {
+    display: none !important;
+  }
+
+  body.touch .skill-bar .skill-key {
+    top: 2px !important;
+    left: 4px !important;
+    font-size: clamp(8px, 1.7vh, 10px) !important;
+  }
+
+  body.touch .skill-bar .skill-lock-note {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--tc-edge-b) + 4px);
+    transform: translateX(-50%);
+  }
+}

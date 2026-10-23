@@ -12830,10 +12830,10 @@
       ctx.fillText(form ? (form.shortName || form.name) : 'EDG', topX + topW - 10, 38);
     }
 
-    const panelW = Math.min(220, Math.max(170, view.w * 0.27));
+    const panelW = Math.min(210, Math.max(168, view.w * 0.26));
     const panelH = 66;
     const panelX = 12;
-    const panelY = view.h - 196;
+    const panelY = 10;
     drawPanel(panelX, panelY, panelW, panelH, 12, 'rgba(8,15,24,0.88)', 'rgba(255,123,111,0.24)');
     drawCircularAvatar(getEquippedAvatar(), panelX + 22, panelY + 33, 19, equippedSkin.ring, { ringWidth: 1.8 });
     ctx.save();
