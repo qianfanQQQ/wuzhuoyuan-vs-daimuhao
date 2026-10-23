@@ -971,6 +971,93 @@
   const audio = new AudioEngine();
 
   /* =======================================================
+     单个循环 Boss 战音轨（所有 Boss 共用，避免重复实例）
+     ======================================================= */
+  class BossMusic {
+    constructor() {
+      this.el = null;
+      this.owner = null;
+      this.wanted = false;
+      this.failed = false;
+    }
+
+    ensure() {
+      if (this.el) return this.el;
+      if (typeof Audio === 'undefined') {
+        this.failed = true;
+        return null;
+      }
+      const el = new Audio();
+      el.src = 'assets/audio/boss-battle.mp3?v=20261023-2';
+      el.loop = true;
+      el.preload = 'auto';
+      el.volume = 0.34;
+      el.addEventListener('error', () => { this.failed = true; });
+      this.el = el;
+      return el;
+    }
+
+    start(owner) {
+      if (!game || !owner) return;
+      if (this.owner && this.owner !== owner) this.stop();
+      this.owner = owner;
+      this.wanted = true;
+      if (save.sfx === false) {
+        this.pause();
+        return;
+      }
+      const el = this.ensure();
+      if (!el || this.failed) return;
+      if (!el.paused) return;
+      const playPromise = el.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          // 自动播放被拒时保持 wanted，下一次用户手势会重试。
+        });
+      }
+    }
+
+    stop(owner) {
+      if (owner && this.owner && this.owner !== owner) return;
+      this.wanted = false;
+      this.owner = null;
+      if (!this.el) return;
+      try {
+        this.el.pause();
+        this.el.currentTime = 0;
+      } catch (error) { /* ignore */ }
+    }
+
+    pause() {
+      if (this.el && !this.el.paused) {
+        try { this.el.pause(); } catch (error) { /* ignore */ }
+      }
+    }
+
+    resume() {
+      if (!this.wanted || save.sfx === false) return;
+      const el = this.ensure();
+      if (!el || this.failed || !el.paused) return;
+      const playPromise = el.play();
+      if (playPromise && typeof playPromise.catch === 'function') playPromise.catch(() => {});
+    }
+
+    setEnabled(enabled) {
+      if (!enabled) {
+        this.pause();
+      } else if (this.wanted) {
+        this.resume();
+      }
+    }
+  }
+
+  const bossMusic = new BossMusic();
+
+  function unlockBossMusic() {
+    if (state === S.PLAYING) bossMusic.resume();
+  }
+
+  /* =======================================================
      头像素材加载
      敌人固定使用 assets/enemy.png；玩家按当前装备皮肤读取
      assets/skins/*.png，非默认皮肤子弹读取 assets/bullets/*.png。
@@ -2339,6 +2426,7 @@
     game.companionBullets = [];
     game.eventBoss = createEventBoss(event);
     game.eventBossActive = true;
+    bossMusic.start('event:' + event.id);
     game.eventBossDefeated = false;
     game.eventBossDelayed = [];
     game.eventBossSpiral = null;
@@ -2364,6 +2452,7 @@
     game.randomEvent.active = false;
     game.randomEvent.phase = 'done';
     game.eventBossActive = false;
+    bossMusic.stop();
     game.eventBoss = null;
     game.eventBossDelayed = [];
     game.eventBossSpiral = null;
@@ -2568,6 +2657,7 @@
       bullets: [],
       hitCount: 0
     };
+    bossMusic.start('shenlin');
     game.banner = null;
     addToast('神临 · 撑过 12 秒', 'warn', 2.0);
     audio.play('boss_warn');
@@ -2581,6 +2671,7 @@
     game.shenlin.warnings = [];
     game.shenlin.bullets = [];
     game.shenlin = null;
+    bossMusic.stop('shenlin');
   }
 
   function updateShenlinChallenge(dt) {
@@ -2969,6 +3060,7 @@
   function toggleSound() {
     save.sfx = !save.sfx;
     audio.setEnabled(save.sfx);
+    bossMusic.setEnabled(save.sfx);
     persistSave();
     updateSoundButton();
     if (save.sfx) {
@@ -3595,6 +3687,7 @@
     activeStore = null;
     storeReturn = null;
     if (randomEventManager) randomEventManager.resetRun();
+    bossMusic.stop();
     audio.ensure();
     clearInput();
     game = createGame(mode);
@@ -3755,6 +3848,7 @@
   function pauseGame() {
     if (!game || state !== S.PLAYING) return;
     setState(S.PAUSED);
+    bossMusic.pause();
     showScreen('pause');
     clearInput();
     const p = game.player;
@@ -3772,6 +3866,7 @@
     hideScreens();
     setState(S.PLAYING);
     clearInput();
+    bossMusic.resume();
     audio.play('ui');
     lastFrameTime = performance.now();
   }
@@ -3791,6 +3886,7 @@
     activeStore = null;
     storeReturn = null;
     if (randomEventManager) randomEventManager.resetRun();
+    bossMusic.stop();
     clearInput();
     game = null;
     setState(S.MENU);
@@ -6707,6 +6803,7 @@
     game.enemies.push(boss);
     game.boss = boss;
     game.bossActive = true;
+    if (stageBoss) bossMusic.start('stage:' + game.stage);
     game.stageState = game.mode === 'stage' ? 'boss' : game.stageState;
 
     setBanner(
@@ -7749,6 +7846,7 @@
     const by = boss.y;
     game.eventBossActive = false;
     game.eventBoss = null;
+    bossMusic.stop();
     game.eventBossDelayed = [];
     game.eventBossSpiral = null;
     game.enemyBullets = [];
@@ -8136,6 +8234,7 @@
     if (game.blackAdiaoVideoActive || game.blackAdiaoTriggered) return false;
     game.blackAdiaoVideoActive = true;
     game.blackAdiaoTriggered = true;
+    bossMusic.stop();
     game.boss = null;
     game.bossActive = false;
     game.enemyBullets = [];
@@ -8245,6 +8344,7 @@
     game.enemies.push(boss);
     game.boss = boss;
     game.bossActive = true;
+    bossMusic.start('black-adiao');
     game.stageState = 'boss';
     game.spawnTimer = 9999;
     setBanner('隐藏后续 Boss · 黑色阿吊', '高密度弹幕与巨物重击 · 击败后获得生命翻倍', 'boss', 3.2);
@@ -8260,6 +8360,7 @@
     boss.bossHandled = true;
     game.boss = null;
     game.bossActive = false;
+    bossMusic.stop();
     game.score += 2000 + game.stage * 500;
     healPlayer(30, true);
 
@@ -8457,6 +8558,7 @@
     p.dead = true;
     p.hp = 0;
     p.dashTime = 0;
+    bossMusic.stop();
     if (game.blackAdiaoVideoActive) {
       game.blackAdiaoVideoActive = false;
       if (el.blackAdiaoVideo) {
@@ -8513,6 +8615,7 @@
 
   function showVictory() {
     if (!game || game.mode !== 'stage' || game.victoryShown) return;
+    bossMusic.stop();
     closeStatsPanel();
     game.victoryShown = true;
     game.stageState = 'cleared';
@@ -8567,6 +8670,7 @@
 
   function showGameOver() {
     if (!game || game.gameOverShown || state !== S.DYING) return;
+    bossMusic.stop();
     closeStatsPanel();
     game.gameOverShown = true;
     cleanupEventOnGameOver();
@@ -13667,6 +13771,8 @@
       el.blackAdiaoVideo.addEventListener('error', finishBlackAdiaoVideo);
     }
     if (el.blackAdiaoSkipBtn) el.blackAdiaoSkipBtn.addEventListener('click', finishBlackAdiaoVideo);
+    window.addEventListener('pointerdown', unlockBossMusic, { passive: true });
+    window.addEventListener('keydown', unlockBossMusic);
     if (el.victoryRestartBtn) el.victoryRestartBtn.addEventListener('click', restartGame);
     if (el.victoryMenuBtn) el.victoryMenuBtn.addEventListener('click', returnToMenu);
 
